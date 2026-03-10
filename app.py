@@ -138,26 +138,34 @@ st.markdown("""
 try:
     init_db()
 
-    # Authentication with Cookies (Persistent Login)
-    # Give cookie manager a stable state
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
+    # --- Persistent Login Logic (Fixed) ---
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
 
+    # Get cookie status
     auth_cookie = cookie_manager.get("family_system_auth")
     
-    if auth_cookie == "authenticated" and not st.session_state["logged_in"]:
-        st.session_state["logged_in"] = True
+    # If cookie is found, auto-login
+    if auth_cookie == "authenticated" and not st.session_state["password_correct"]:
         st.session_state["password_correct"] = True
         st.rerun()
 
-    if not st.session_state.get("password_correct"):
+    # If not logged in, decide whether to show login screen or wait for cookie
+    if not st.session_state["password_correct"]:
+        # If the auth_cookie is literally None, it might still be loading from browser
+        if auth_cookie is None:
+            st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🔑 正在验证自动登录状态...</h3>", unsafe_allow_html=True)
+            # Give it a tiny bit of time or just wait for the component's internal rerun
+            st.stop()
+        
+        # If auth_cookie is definitely NOT 'authenticated', show the login UI
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
-            pwd = st.text_input("请输入访问密码 (6位数字):", type="password")
+            pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
             if pwd == "790228":
                 st.session_state["password_correct"] = True
-                st.session_state["logged_in"] = True
+                # Set cookie to expire in 30 days
                 cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             elif pwd:
