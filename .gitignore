@@ -1,0 +1,23 @@
+# Environments
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Local Data (SQLite DB)
+data/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# UV
+.uv/
+uv.lock
