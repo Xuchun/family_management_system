@@ -112,6 +112,13 @@ def delete_task(task_id):
     conn.commit()
     conn.close()
 
+def update_task_text(task_id, new_text):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE tasks SET task = ? WHERE id = ?", (new_text, task_id))
+    conn.commit()
+    conn.close()
+
 # --- 5. UI Styling ---
 st.markdown("""
 <style>
@@ -141,6 +148,8 @@ try:
     # --- 🔐 登录逻辑与持久化验证 ---
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
+    if "editing_task_id" not in st.session_state:
+        st.session_state["editing_task_id"] = None
 
     # 1. 尝试从浏览器读取 Cookie (仅在尚未通过当前会话认证时)
     if not st.session_state["authenticated"]:
@@ -170,6 +179,60 @@ try:
         # 如果依然没通过认证（比如密码没输对），则阻断后续显示
         if not st.session_state["authenticated"]:
             st.stop()
+
+    # --- 🛠️ 辅助 UI 函数 ---
+    def hits_day(pattern, target_date):
+        if not pattern: return False
+        p = pattern.strip()
+        if p == 'Everyday': return True
+        if p == 'Weekend' and target_date.weekday() >= 5: return True
+        return p == target_date.strftime('%A')
+
+    def render_task(row, is_shadow=False, location="main"):
+        key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
+        del_id = f"{location}_d_{row['id']}"
+        edit_id = f"{location}_e_{row['id']}"
+        
+        with st.container():
+            st.markdown('<div class="task-container">', unsafe_allow_html=True)
+            # Layout: checkbox, content area (text or input), action buttons
+            c1, c2, c3 = st.columns([0.05, 0.75, 0.2])
+            
+            if not is_shadow:
+                is_comp = c1.checkbox("", value=row['completed'], key=key_id)
+                if is_comp != row['completed']:
+                    update_task_status(row['id'], is_comp)
+                    st.rerun()
+            else:
+                c1.markdown("🔄")
+                
+            # Handle inline edit
+            if st.session_state.get("editing_task_id") == row['id']:
+                new_text = c2.text_input("修改事项:", value=row['task'], key=f"inp_{location}_{row['id']}")
+                save_col, can_col = c3.columns(2)
+                if save_col.button("💾", key=f"save_{location}_{row['id']}", help="保存"):
+                    update_task_text(row['id'], new_text)
+                    st.session_state["editing_task_id"] = None
+                    st.rerun()
+                if can_col.button("🚫", key=f"can_{location}_{row['id']}", help="取消"):
+                    st.session_state["editing_task_id"] = None
+                    st.rerun()
+            else:
+                style = "todo-completed" if row['completed'] else ""
+                recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
+                due_val = f"📅 预计: {row['due_date'][:10]}" if row['due_date'] else ""
+                
+                c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_tag}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
+                
+                if not is_shadow:
+                    edit_col, del_col = c3.columns(2)
+                    if edit_col.button("✏️", key=edit_id, help="修改"):
+                        st.session_state["editing_task_id"] = row['id']
+                        st.rerun()
+                    if del_col.button("🗑️", key=del_id, help="删除"):
+                        delete_task(row['id'])
+                        st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
@@ -205,44 +268,10 @@ try:
             # Calculate end of current week (Sunday)
             end_of_week = today_date + timedelta(days=6 - today_date.weekday())
             
-            def render_task(row, is_shadow=False, location="main"):
-                key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
-                del_id = f"{location}_d_{row['id']}"
-                
-                with st.container():
-                    st.markdown('<div class="task-container">', unsafe_allow_html=True)
-                    c1, c2, c3 = st.columns([0.05, 0.85, 0.1])
-                    
-                    if not is_shadow:
-                        is_comp = c1.checkbox("", value=row['completed'], key=key_id)
-                        if is_comp != row['completed']:
-                            update_task_status(row['id'], is_comp)
-                            st.rerun()
-                    else:
-                        c1.markdown("🔄")
-                        
-                    style = "todo-completed" if row['completed'] else ""
-                    recur_label = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
-                    due_val = f"📅 预计: {row['due_date'][:10]}" if row['due_date'] else ""
-                    c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_label}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
-                    
-                    if not is_shadow:
-                        if c3.button("🗑️", key=del_id):
-                            delete_task(row['id'])
-                            st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-
             open_tasks = tasks_df[tasks_df['completed'] == 0]
             completed_tasks = tasks_df[tasks_df['completed'] == 1]
             recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
             
-            def hits_day(pattern, target_date):
-                if not pattern: return False
-                p = pattern.strip()
-                if p == 'Everyday': return True
-                if p == 'Weekend' and target_date.weekday() >= 5: return True
-                return p == target_date.strftime('%A')
-
             for _, row in open_tasks.iterrows():
                 if row['recurring_pattern']:
                     recurring_list.append(row)
