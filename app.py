@@ -297,11 +297,6 @@ try:
                 with st.expander("✅ 查看已完成事项"):
                     for _, row in completed_tasks.iterrows(): render_task(row, location="comp")
 
-            if not completed_tasks.empty:
-                st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("✅ 查看已完成事项"):
-                    for _, row in completed_tasks.iterrows(): render_task(row)
-
     with t2:
         cal_url = f"https://calendar.google.com/calendar/embed?src={cal_email}&ctz=Asia%2FSingapore&hl=zh_CN&mode=AGENDA"
         st.components.v1.iframe(cal_url, height=700, scrolling=True)
