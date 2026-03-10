@@ -195,6 +195,8 @@ try:
         else:
             now = get_now_sgt()
             today_date = now.date()
+            tomorrow_date = today_date + timedelta(days=1)
+            # Calculate end of current week (Sunday)
             end_of_week = today_date + timedelta(days=6 - today_date.weekday())
             
             def render_task(row, is_shadow=False, location="main"):
@@ -226,7 +228,7 @@ try:
 
             open_tasks = tasks_df[tasks_df['completed'] == 0]
             completed_tasks = tasks_df[tasks_df['completed'] == 1]
-            recurring_list, today_list, week_list, later_list = [], [], [], []
+            recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
             
             def hits_day(pattern, target_date):
                 if not pattern: return False
@@ -245,23 +247,31 @@ try:
                 try:
                     due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
                     if due_dt <= today_date: today_list.append(row)
+                    elif due_dt == tomorrow_date: tomorrow_list.append(row)
                     elif due_dt <= end_of_week: week_list.append(row)
                     else: later_list.append(row)
                 except: today_list.append(row)
 
-            shadow_today, shadow_week = [], []
+            shadow_today, shadow_tomorrow, shadow_week = [], [], []
             for item in recurring_list:
                 if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
-                curr = today_date + timedelta(days=1)
+                if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
+                
+                curr = tomorrow_date + timedelta(days=1)
                 while curr <= end_of_week:
                     if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                     curr += timedelta(days=1)
 
-            # --- Displays only daily/weekly view in Tab 1 ---
+            # --- Displays Tab 1 ---
             if today_list or shadow_today:
                 st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
                 for row in shadow_today: render_task(row, is_shadow=True, location="sh_today")
                 for row in today_list: render_task(row, location="today")
+
+            if tomorrow_list or shadow_tomorrow:
+                st.markdown('<div class="section-header">🌙 明日处理事项</div>', unsafe_allow_html=True)
+                for row in shadow_tomorrow: render_task(row, is_shadow=True, location="sh_tomorrow")
+                for row in tomorrow_list: render_task(row, location="tomorrow")
             
             if week_list or shadow_week:
                 st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
