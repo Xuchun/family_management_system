@@ -6,8 +6,9 @@ import pytz
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import extra_streamlit_components as stx
 
-# 1. 必须是第一个命令
+# --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
     page_title="家庭事项管理系统",
     page_icon="🏠",
@@ -15,10 +16,16 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# 2. 环境初始化
+# --- 2. Cookie Management ---
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
+
+# --- 3. Environment & Global Config ---
 load_dotenv()
 try:
-    # 优先读取 Streamlit Secrets
     api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
@@ -29,9 +36,9 @@ SGT = pytz.timezone('Asia/Singapore')
 def get_now_sgt():
     return datetime.now(SGT)
 
-# --- 数据库配置 (直接在根目录) ---
 DB_FILE = "tasks.db"
 
+# --- 4. Database Functions ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -43,7 +50,7 @@ def init_db():
                       task TEXT NOT NULL,
                       completed BOOLEAN NOT NULL DEFAULT 0,
                       due_date TEXT,
-                      recurring_pattern TEXT, -- e.g., 'Tuesday', 'Monday', 'Everyday'
+                      recurring_pattern TEXT,
                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     else:
         if 'due_date' not in columns:
@@ -62,26 +69,20 @@ def extract_date_llm(task_text):
             messages=[
                 {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
                 从用户文本中提取两类信息：
-                1. 具体的单次日期时间：'YYYY-MM-DD HH:MM'。若未提到，默认为本周内最匹配的日期，完全无日期则返回今天。
-                2. 循环模式：如果提到“每周几”、“每天”、“每周末”，返回对应的英文星期(Monday, Tuesday...)或'Everyday', 'Weekend'。
-                
-                返回格式：DATE: YYYY-MM-DD HH:MM | RECUR: Pattern (无循环则Pattern为None)
-                只需返回这一行字符串。"""},
+                1. 具体的单次日期时间：'YYYY-MM-DD HH:MM'。
+                2. 循环模式：'Monday', 'Tuesday'..., 'Everyday', 'Weekend'。
+                返回格式：DATE: YYYY-MM-DD HH:MM | RECUR: Pattern (无循环则为None)"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
         )
         res = response.choices[0].message.content.strip()
-        # Parse: DATE: 2026-03-10 23:59 | RECUR: Tuesday
         parts = res.split('|')
         dt_str = parts[0].replace('DATE:', '').strip()
         recur_str = parts[1].replace('RECUR:', '').strip()
-        
-        # Validation
         datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         return dt_str, (recur_str if recur_str != "None" else None)
-    except Exception as e:
-        print(f"LLM 解析错误: {e}")
+    except Exception:
         return now.strftime("%Y-%m-%d 23:59"), None
 
 def get_tasks():
@@ -114,19 +115,15 @@ def delete_task(task_id):
     conn.commit()
     conn.close()
 
-# --- 界面样式 ---
+# --- 5. UI Styling ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap');
     .stApp { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); font-family: 'Outfit', sans-serif; }
     .main-header { color: #1e3a8a; text-align: center; font-size: 2rem !important; font-weight: 700; padding: 1rem 0; }
     .section-header { 
-        color: #1e3a8a; 
-        font-weight: 700; 
-        padding: 1.5rem 0 0.5rem 0; 
-        font-size: 1.2rem;
-        border-bottom: 2px solid #e5e7eb;
-        margin-bottom: 0.5rem;
+        color: #1e3a8a; font-weight: 700; padding: 1.5rem 0 0.5rem 0; font-size: 1.2rem;
+        border-bottom: 2px solid #e5e7eb; margin-bottom: 0.5rem;
     }
     .task-container { background: white; padding: 0.8rem 1rem; border-bottom: 1px solid #eee; transition: background 0.2s; }
     .task-container:hover { background-color: #f9fafb; }
@@ -134,41 +131,46 @@ st.markdown("""
     .todo-date { font-size: 0.85rem; color: #6366f1; font-weight: 600; margin-top: 4px; }
     .todo-completed { text-decoration: line-through; opacity: 0.4; }
     .recur-tag {
-        background: #e0e7ff;
-        color: #4338ca;
-        font-size: 0.75rem;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-weight: 600;
-        margin-left: 8px;
+        background: #e0e7ff; color: #4338ca; font-size: 0.75rem; padding: 2px 8px;
+        border-radius: 12px; font-weight: 600; margin-left: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 主逻辑块 ---
+# --- 6. Main App Structure ---
 try:
     init_db()
 
-    # 1. 登录验证
-    if "password_correct" not in st.session_state:
+    # Authentication with Cookies
+    auth_status = cookie_manager.get("family_system_auth")
+    
+    logged_in = False
+    if "password_correct" in st.session_state and st.session_state["password_correct"]:
+        logged_in = True
+    elif auth_status == "authenticated":
+        st.session_state["password_correct"] = True
+        logged_in = True
+
+    if not logged_in:
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
-        col_l, col_m, col_r = st.columns([1, 2, 1])
+        _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
             pwd = st.text_input("请输入访问密码 (6位数字):", type="password")
             if pwd == "790228":
                 st.session_state["password_correct"] = True
+                cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             elif pwd:
-                st.error("🚫 密码错误，请重试")
+                st.error("🚫 密码错误")
             st.info("💡 提示：密码是6位数字")
-            st.caption("忘记密码？联系 [xuchunli@gmail.com](mailto:xuchunli@gmail.com)")
         st.stop()
 
-    # 2. 侧边栏
+    # Sidebar
     with st.sidebar:
         st.header("🏠 系统控制")
         if st.button("🔴 退出登录", use_container_width=True):
             del st.session_state["password_correct"]
+            cookie_manager.delete("family_system_auth")
             st.rerun()
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
         st.divider()
@@ -182,7 +184,7 @@ try:
         st.markdown("### ⚙️ 日历配置")
         cal_email = st.text_input("Google Email:", value="xuchunli@gmail.com")
 
-    # 3. 主界面
+    # Main Interface
     st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["📝 待办事宜", "📅 家庭日历"])
 
@@ -193,12 +195,9 @@ try:
         else:
             now = get_now_sgt()
             today_date = now.date()
-            today_weekday = now.strftime('%A')
-            # Calculate end of current week (Sunday)
             end_of_week = today_date + timedelta(days=6 - today_date.weekday())
             
             def render_task(row, is_shadow=False, location="main"):
-                # Unique key generation based on location
                 key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
                 del_id = f"{location}_d_{row['id']}"
                 
@@ -212,7 +211,7 @@ try:
                             update_task_status(row['id'], is_comp)
                             st.rerun()
                     else:
-                        c1.markdown("🔄") # Indicator for recurring shadow task
+                        c1.markdown("🔄")
                         
                     style = "todo-completed" if row['completed'] else ""
                     recur_label = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
@@ -225,56 +224,39 @@ try:
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
-            # Categorization Logic
             open_tasks = tasks_df[tasks_df['completed'] == 0]
             completed_tasks = tasks_df[tasks_df['completed'] == 1]
-            
             recurring_list, today_list, week_list, later_list = [], [], [], []
             
-            # Helper to check if a recurring task hits a specific day
             def hits_day(pattern, target_date):
                 if not pattern: return False
-                pattern = pattern.strip()
-                if pattern == 'Everyday': return True
-                if pattern == 'Weekend' and target_date.weekday() >= 5: return True
-                return pattern == target_date.strftime('%A')
+                p = pattern.strip()
+                if p == 'Everyday': return True
+                if p == 'Weekend' and target_date.weekday() >= 5: return True
+                return p == target_date.strftime('%A')
 
             for _, row in open_tasks.iterrows():
-                # Any task with a recurring pattern goes to the top section
                 if row['recurring_pattern']:
                     recurring_list.append(row)
-                    continue # Prevent it from appearing as a normal task below
-                
-                # Normal date logic for NON-RECURRING tasks
+                    continue
                 if not row['due_date']:
                     today_list.append(row)
                     continue
                 try:
                     due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
-                    if due_dt <= today_date:
-                        today_list.append(row)
-                    elif due_dt <= end_of_week:
-                        week_list.append(row)
-                    else:
-                        later_list.append(row)
-                except:
-                    today_list.append(row)
+                    if due_dt <= today_date: today_list.append(row)
+                    elif due_dt <= end_of_week: week_list.append(row)
+                    else: later_list.append(row)
+                except: today_list.append(row)
 
-            # Inject recurring tasks into daily slots as "Shadows"
-            shadow_today = []
-            shadow_week = []
+            shadow_today, shadow_week = [], []
             for item in recurring_list:
-                # If it's recurring today
-                if hits_day(item['recurring_pattern'], today_date):
-                    shadow_today.append(item)
-                # If it's recurring later this week (from tomorrow to Sunday)
+                if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
                 curr = today_date + timedelta(days=1)
                 while curr <= end_of_week:
-                    if hits_day(item['recurring_pattern'], curr):
-                        shadow_week.append((item, curr))
+                    if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                     curr += timedelta(days=1)
 
-            # Display sections
             if recurring_list:
                 st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
                 for row in recurring_list: render_task(row, location="recur")
