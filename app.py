@@ -17,11 +17,8 @@ st.set_page_config(
 )
 
 # --- 2. Cookie Management ---
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+# Cookie 管理器初始化 (不可使用 @st.cache_resource，因为它是 UI 组件)
+cookie_manager = stx.CookieManager()
 
 # --- 3. Environment & Global Config ---
 load_dotenv()
