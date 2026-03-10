@@ -7,6 +7,14 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# --- Streamlit UI Config ---
+st.set_page_config(
+    page_title="家庭事项管理系统",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="auto"
+)
+
 # --- Load Environment Variables ---
 load_dotenv()
 # Safely prioritize st.secrets for Streamlit Cloud, fallback to .env for local
@@ -19,14 +27,6 @@ if not api_key:
     api_key = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=api_key) if api_key else None
-
-# --- Streamlit UI Config ---
-st.set_page_config(
-    page_title="家庭事项管理系统",
-    page_icon="🏠",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
 
 # --- Timezone Setup ---
 SGT = pytz.timezone('Asia/Singapore')
