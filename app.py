@@ -291,6 +291,10 @@ try:
                     temp_row['due_date'] = d.strftime("%Y-%m-%d 12:00")
                     render_task(temp_row, is_shadow=True, location="sh_week")
                 for row in week_list: render_task(row, location="week")
+                
+            if later_list:
+                st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
+                for row in later_list: render_task(row, location="later")
 
             if not completed_tasks.empty:
                 st.markdown("<br>", unsafe_allow_html=True)
