@@ -186,7 +186,7 @@ try:
 
     # Main Interface
     st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
-    t1, t2 = st.tabs(["📝 待办事宜", "📅 家庭日历"])
+    t1, t2, t3 = st.tabs(["📝 待办事宜", "� 循环事项", "�📅 家庭日历"])
 
     with t1:
         tasks_df = get_tasks()
@@ -257,10 +257,7 @@ try:
                     if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                     curr += timedelta(days=1)
 
-            if recurring_list:
-                st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
-                for row in recurring_list: render_task(row, location="recur")
-
+            # --- Displays only daily/weekly view in Tab 1 ---
             if today_list or shadow_today:
                 st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
                 for row in shadow_today: render_task(row, is_shadow=True, location="sh_today")
@@ -284,6 +281,14 @@ try:
                     for _, row in completed_tasks.iterrows(): render_task(row, location="comp")
 
     with t2:
+        st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
+        if not recurring_list:
+            st.info("目前没有循环事项。您可以添加如“每周二购买零食”来创建。")
+        else:
+            for row in recurring_list:
+                render_task(row, location="recur_tab")
+
+    with t3:
         cal_url = f"https://calendar.google.com/calendar/embed?src={cal_email}&ctz=Asia%2FSingapore&hl=zh_CN&mode=AGENDA"
         st.components.v1.iframe(cal_url, height=700, scrolling=True)
 
