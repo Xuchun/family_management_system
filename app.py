@@ -197,13 +197,17 @@ try:
             # Calculate end of current week (Sunday)
             end_of_week = today_date + timedelta(days=6 - today_date.weekday())
             
-            def render_task(row, is_shadow=False):
+            def render_task(row, is_shadow=False, location="main"):
+                # Unique key generation based on location
+                key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
+                del_id = f"{location}_d_{row['id']}"
+                
                 with st.container():
                     st.markdown('<div class="task-container">', unsafe_allow_html=True)
                     c1, c2, c3 = st.columns([0.05, 0.85, 0.1])
                     
                     if not is_shadow:
-                        is_comp = c1.checkbox("", value=row['completed'], key=f"c_{row['id']}")
+                        is_comp = c1.checkbox("", value=row['completed'], key=key_id)
                         if is_comp != row['completed']:
                             update_task_status(row['id'], is_comp)
                             st.rerun()
@@ -216,7 +220,7 @@ try:
                     c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_label}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
                     
                     if not is_shadow:
-                        if c3.button("🗑️", key=f"d_{row['id']}"):
+                        if c3.button("🗑️", key=del_id):
                             delete_task(row['id'])
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -272,22 +276,25 @@ try:
             # Display sections
             if recurring_list:
                 st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
-                for row in recurring_list: render_task(row)
+                for row in recurring_list: render_task(row, location="recur")
 
             if today_list or shadow_today:
                 st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
-                for row in shadow_today: render_task(row, is_shadow=True)
-                for row in today_list: render_task(row)
+                for row in shadow_today: render_task(row, is_shadow=True, location="sh_today")
+                for row in today_list: render_task(row, location="today")
             
             if week_list or shadow_week:
                 st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
-                # Group shadows by date for better display? Let's just list them
                 for item, d in shadow_week:
-                    # Create a temporary row with the shadow date for rendering
                     temp_row = item.copy()
                     temp_row['due_date'] = d.strftime("%Y-%m-%d 12:00")
-                    render_task(temp_row, is_shadow=True)
-                for row in week_list: render_task(row)
+                    render_task(temp_row, is_shadow=True, location="sh_week")
+                for row in week_list: render_task(row, location="week")
+
+            if not completed_tasks.empty:
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander("✅ 查看已完成事项"):
+                    for _, row in completed_tasks.iterrows(): render_task(row, location="comp")
 
             if not completed_tasks.empty:
                 st.markdown("<br>", unsafe_allow_html=True)
