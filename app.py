@@ -18,7 +18,7 @@ st.set_page_config(
 
 # --- 2. Cookie Management ---
 # Cookie 管理器初始化 (不可使用 @st.cache_resource，因为它是 UI 组件)
-cookie_manager = stx.CookieManager(key="family_auth_manager")
+cookie_manager = stx.CookieManager()
 
 # --- 3. Environment & Global Config ---
 load_dotenv()
@@ -138,36 +138,38 @@ st.markdown("""
 try:
     init_db()
 
-    # --- Persistent Login Logic (Fail-safe) ---
-    if "password_correct" not in st.session_state:
-        st.session_state["password_correct"] = False
+    # --- 🔐 登录逻辑与持久化验证 ---
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
 
-    # Get cookie status (asynchronous)
-    auth_cookie = cookie_manager.get("family_system_auth")
-    
-    # If cookie is found, auto-login and refresh the page
-    if auth_cookie == "authenticated" and not st.session_state["password_correct"]:
-        st.session_state["password_correct"] = True
-        st.rerun()
+    # 1. 尝试从浏览器读取 Cookie (仅在尚未通过当前会话认证时)
+    if not st.session_state["authenticated"]:
+        auth_cookie = cookie_manager.get("family_system_auth")
+        if auth_cookie == "authenticated":
+            st.session_state["authenticated"] = True
+            st.rerun()
 
-    # If NOT logged in (neither session state nor cookie), show login UI
-    if not st.session_state["password_correct"]:
+    # 2. 如果当前未通过任何方式认证，则显示登录页面
+    if not st.session_state["authenticated"]:
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
             pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
             if pwd == "790228":
-                st.session_state["password_correct"] = True
-                # Set cookie to expire in 30 days
+                # 【核心修复】先更新状态并下发写入指令，但不重刷页面
+                st.session_state["authenticated"] = True
                 cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
-                st.rerun()
+                st.success("✅ 登录成功！正在为您开启系统...")
+                # 此处不使用 st.stop()，让程序继续向下运行，从而渲染主界面
             elif pwd:
                 st.error("🚫 密码错误")
             
-            # Subtitle or hint
-            st.info("💡 提示：密码是6位数字。如果页面没有刷新，请手动输入密码。")
-            
-        st.stop() # Only stop the rest of the app from running until logged in
+            st.info("💡 提示：密码是6位数字。")
+            st.warning("⚠️ 如果您是 Safari 浏览器用户：请确保已关闭‘阻止所有 Cookie’或‘阻止跨站追踪’设置，否则系统无法保持登录。")
+        
+        # 如果依然没通过认证（比如密码没输对），则阻断后续显示
+        if not st.session_state["authenticated"]:
+            st.stop()
 
     # Sidebar
     with st.sidebar:
