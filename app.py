@@ -243,8 +243,9 @@ try:
                 # Any task with a recurring pattern goes to the top section
                 if row['recurring_pattern']:
                     recurring_list.append(row)
+                    continue # Prevent it from appearing as a normal task below
                 
-                # Normal date logic
+                # Normal date logic for NON-RECURRING tasks
                 if not row['due_date']:
                     today_list.append(row)
                     continue
