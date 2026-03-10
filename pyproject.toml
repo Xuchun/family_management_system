@@ -1,7 +1,7 @@
 [project]
 name = "family-management-system"
 version = "0.1.0"
-description = "Add your description here"
+description = "Family Management System"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,3 +11,6 @@ dependencies = [
     "pytz>=2026.1.post1",
     "streamlit>=1.55.0",
 ]
+
+[tool.poetry]
+package-mode = false
