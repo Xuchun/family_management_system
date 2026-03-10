@@ -18,7 +18,7 @@ st.set_page_config(
 
 # --- 2. Cookie Management ---
 # Cookie 管理器初始化 (不可使用 @st.cache_resource，因为它是 UI 组件)
-cookie_manager = stx.CookieManager()
+cookie_manager = stx.CookieManager(key="family_auth_manager")
 
 # --- 3. Environment & Global Config ---
 load_dotenv()
@@ -138,23 +138,26 @@ st.markdown("""
 try:
     init_db()
 
-    # Authentication with Cookies
-    auth_status = cookie_manager.get("family_system_auth")
-    
-    logged_in = False
-    if "password_correct" in st.session_state and st.session_state["password_correct"]:
-        logged_in = True
-    elif auth_status == "authenticated":
-        st.session_state["password_correct"] = True
-        logged_in = True
+    # Authentication with Cookies (Persistent Login)
+    # Give cookie manager a stable state
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
 
-    if not logged_in:
+    auth_cookie = cookie_manager.get("family_system_auth")
+    
+    if auth_cookie == "authenticated" and not st.session_state["logged_in"]:
+        st.session_state["logged_in"] = True
+        st.session_state["password_correct"] = True
+        st.rerun()
+
+    if not st.session_state.get("password_correct"):
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
             pwd = st.text_input("请输入访问密码 (6位数字):", type="password")
             if pwd == "790228":
                 st.session_state["password_correct"] = True
+                st.session_state["logged_in"] = True
                 cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             elif pwd:
@@ -183,7 +186,7 @@ try:
 
     # Main Interface
     st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
-    t1, t2, t3 = st.tabs(["📝 待办事宜", "� 循环事项", "�📅 家庭日历"])
+    t1, t2, t3, t4 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项", "📅 家庭日历"])
 
     with t1:
         tasks_df = get_tasks()
@@ -272,11 +275,6 @@ try:
                 st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
                 for row in later_list: render_task(row, location="later")
 
-            if not completed_tasks.empty:
-                st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("✅ 查看已完成事项"):
-                    for _, row in completed_tasks.iterrows(): render_task(row, location="comp")
-
     with t2:
         st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
         if not recurring_list:
@@ -286,6 +284,14 @@ try:
                 render_task(row, location="recur_tab")
 
     with t3:
+        st.markdown('<div class="section-header">✅ 已完成事项归档</div>', unsafe_allow_html=True)
+        if completed_tasks.empty:
+            st.info("目前没有已完成的事项。")
+        else:
+            for _, row in completed_tasks.iterrows():
+                render_task(row, location="comp_tab")
+
+    with t4:
         cal_url = f"https://calendar.google.com/calendar/embed?src={cal_email}&ctz=Asia%2FSingapore&hl=zh_CN&mode=AGENDA"
         st.components.v1.iframe(cal_url, height=700, scrolling=True)
 
