@@ -43,36 +43,46 @@ def init_db():
                       task TEXT NOT NULL,
                       completed BOOLEAN NOT NULL DEFAULT 0,
                       due_date TEXT,
+                      recurring_pattern TEXT, -- e.g., 'Tuesday', 'Monday', 'Everyday'
                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    elif 'due_date' not in columns:
-        c.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+    else:
+        if 'due_date' not in columns:
+            c.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+        if 'recurring_pattern' not in columns:
+            c.execute("ALTER TABLE tasks ADD COLUMN recurring_pattern TEXT")
     conn.commit()
     conn.close()
 
 def extract_date_llm(task_text):
-    if not client: return None
+    if not client: return None, None
     now = get_now_sgt()
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": f"""你是时间解析专家。今天是 {now.strftime('%Y-%m-%d')} (新加坡时间, {now.strftime('%A')})。
-                从用户文本中提取任务日期和时间。
-                - 如果提取到具体时间，返回 'YYYY-MM-DD HH:MM' (24小时制)。
-                - 如果只有日期，返回 'YYYY-MM-DD 12:00'。
-                - 如果用户没有提到任何日期，请默认返回【今天】的日期 'YYYY-MM-DD 23:59'。
-                - 只返回 'YYYY-MM-DD HH:MM' 格式的字符串，不要任何多余文字。"""},
+                {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
+                从用户文本中提取两类信息：
+                1. 具体的单次日期时间：'YYYY-MM-DD HH:MM'。若未提到，默认为本周内最匹配的日期，完全无日期则返回今天。
+                2. 循环模式：如果提到“每周几”、“每天”、“每周末”，返回对应的英文星期(Monday, Tuesday...)或'Everyday', 'Weekend'。
+                
+                返回格式：DATE: YYYY-MM-DD HH:MM | RECUR: Pattern (无循环则Pattern为None)
+                只需返回这一行字符串。"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
         )
-        dt_str = response.choices[0].message.content.strip()
-        # 验证格式防止AI返回乱码
+        res = response.choices[0].message.content.strip()
+        # Parse: DATE: 2026-03-10 23:59 | RECUR: Tuesday
+        parts = res.split('|')
+        dt_str = parts[0].replace('DATE:', '').strip()
+        recur_str = parts[1].replace('RECUR:', '').strip()
+        
+        # Validation
         datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
-        return dt_str
+        return dt_str, (recur_str if recur_str != "None" else None)
     except Exception as e:
         print(f"LLM 解析错误: {e}")
-        return now.strftime("%Y-%m-%d 23:59") # 彻底兜底，解析失败也给个今天的日期
+        return now.strftime("%Y-%m-%d 23:59"), None
 
 def get_tasks():
     conn = sqlite3.connect(DB_FILE)
@@ -82,11 +92,11 @@ def get_tasks():
     return df
 
 def add_task(task_text):
-    due_datetime = extract_date_llm(task_text)
+    due_datetime, recur_pattern = extract_date_llm(task_text)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO tasks (task, due_date, created_at) VALUES (?, ?, ?)", 
-              (task_text, due_datetime, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
+    c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
+              (task_text, due_datetime, recur_pattern, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
@@ -123,6 +133,15 @@ st.markdown("""
     .todo-text { font-size: 1.1rem !important; color: #1f2937; margin: 0; }
     .todo-date { font-size: 0.85rem; color: #6366f1; font-weight: 600; margin-top: 4px; }
     .todo-completed { text-decoration: line-through; opacity: 0.4; }
+    .recur-tag {
+        background: #e0e7ff;
+        color: #4338ca;
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: 600;
+        margin-left: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -153,7 +172,7 @@ try:
             st.rerun()
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
         st.divider()
-        new_task = st.text_input("➕ 新增事项:", placeholder="例如：周五拿快递...")
+        new_task = st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...")
         if st.button("立即添加", use_container_width=True):
             if new_task:
                 with st.spinner("AI 解析中..."):
@@ -174,35 +193,54 @@ try:
         else:
             now = get_now_sgt()
             today_date = now.date()
+            today_weekday = now.strftime('%A')
             # Calculate end of current week (Sunday)
             end_of_week = today_date + timedelta(days=6 - today_date.weekday())
             
-            def render_task(row):
+            def render_task(row, is_shadow=False):
                 with st.container():
                     st.markdown('<div class="task-container">', unsafe_allow_html=True)
                     c1, c2, c3 = st.columns([0.05, 0.85, 0.1])
                     
-                    is_comp = c1.checkbox("", value=row['completed'], key=f"c_{row['id']}")
-                    if is_comp != row['completed']:
-                        update_task_status(row['id'], is_comp)
-                        st.rerun()
+                    if not is_shadow:
+                        is_comp = c1.checkbox("", value=row['completed'], key=f"c_{row['id']}")
+                        if is_comp != row['completed']:
+                            update_task_status(row['id'], is_comp)
+                            st.rerun()
+                    else:
+                        c1.markdown("🔄") # Indicator for recurring shadow task
                         
                     style = "todo-completed" if row['completed'] else ""
-                    due_label = f"<div class='todo-date'>📅 预计: {row['due_date'][:10]}</div>" if row['due_date'] else ""
-                    c2.markdown(f"<p class='todo-text {style}'>{row['task']}</p>{due_label}", unsafe_allow_html=True)
+                    recur_label = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
+                    due_val = f"📅 预计: {row['due_date'][:10]}" if row['due_date'] else ""
+                    c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_label}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
                     
-                    if c3.button("🗑️", key=f"d_{row['id']}"):
-                        delete_task(row['id'])
-                        st.rerun()
+                    if not is_shadow:
+                        if c3.button("🗑️", key=f"d_{row['id']}"):
+                            delete_task(row['id'])
+                            st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
             # Categorization Logic
             open_tasks = tasks_df[tasks_df['completed'] == 0]
             completed_tasks = tasks_df[tasks_df['completed'] == 1]
             
-            today_list, week_list, later_list = [], [], []
+            recurring_list, today_list, week_list, later_list = [], [], [], []
             
+            # Helper to check if a recurring task hits a specific day
+            def hits_day(pattern, target_date):
+                if not pattern: return False
+                pattern = pattern.strip()
+                if pattern == 'Everyday': return True
+                if pattern == 'Weekend' and target_date.weekday() >= 5: return True
+                return pattern == target_date.strftime('%A')
+
             for _, row in open_tasks.iterrows():
+                # Any task with a recurring pattern goes to the top section
+                if row['recurring_pattern']:
+                    recurring_list.append(row)
+                
+                # Normal date logic
                 if not row['due_date']:
                     today_list.append(row)
                     continue
@@ -217,18 +255,39 @@ try:
                 except:
                     today_list.append(row)
 
+            # Inject recurring tasks into daily slots as "Shadows"
+            shadow_today = []
+            shadow_week = []
+            for item in recurring_list:
+                # If it's recurring today
+                if hits_day(item['recurring_pattern'], today_date):
+                    shadow_today.append(item)
+                # If it's recurring later this week (from tomorrow to Sunday)
+                curr = today_date + timedelta(days=1)
+                while curr <= end_of_week:
+                    if hits_day(item['recurring_pattern'], curr):
+                        shadow_week.append((item, curr))
+                    curr += timedelta(days=1)
+
             # Display sections
-            if today_list:
+            if recurring_list:
+                st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
+                for row in recurring_list: render_task(row)
+
+            if today_list or shadow_today:
                 st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
+                for row in shadow_today: render_task(row, is_shadow=True)
                 for row in today_list: render_task(row)
             
-            if week_list:
+            if week_list or shadow_week:
                 st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
+                # Group shadows by date for better display? Let's just list them
+                for item, d in shadow_week:
+                    # Create a temporary row with the shadow date for rendering
+                    temp_row = item.copy()
+                    temp_row['due_date'] = d.strftime("%Y-%m-%d 12:00")
+                    render_task(temp_row, is_shadow=True)
                 for row in week_list: render_task(row)
-                
-            if later_list:
-                st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
-                for row in later_list: render_task(row)
 
             if not completed_tasks.empty:
                 st.markdown("<br>", unsafe_allow_html=True)
