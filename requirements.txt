@@ -3,3 +3,4 @@ pandas
 pytz
 openai
 python-dotenv
+extra-streamlit-components
