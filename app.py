@@ -272,7 +272,7 @@ try:
 
             # --- Displays Tab 1 ---
             if today_list or shadow_today:
-                st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
                 for row in shadow_today: render_task(row, is_shadow=True, location="sh_today")
                 for row in today_list: render_task(row, location="today")
 
