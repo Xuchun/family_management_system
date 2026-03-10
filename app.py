@@ -56,14 +56,23 @@ def extract_date_llm(task_text):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": f"今天是 {now.strftime('%Y-%m-%d')}。提取 'YYYY-MM-DD HH:MM' 格式时间，若无时间返回 None。只需返回字符串。"},
+                {"role": "system", "content": f"""你是时间解析专家。今天是 {now.strftime('%Y-%m-%d')} (新加坡时间, {now.strftime('%A')})。
+                从用户文本中提取任务日期和时间。
+                - 如果提取到具体时间，返回 'YYYY-MM-DD HH:MM' (24小时制)。
+                - 如果只有日期，返回 'YYYY-MM-DD 12:00'。
+                - 如果用户没有提到任何日期，请默认返回【今天】的日期 'YYYY-MM-DD 23:59'。
+                - 只返回 'YYYY-MM-DD HH:MM' 格式的字符串，不要任何多余文字。"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
         )
         dt_str = response.choices[0].message.content.strip()
-        return dt_str if dt_str != "None" else None
-    except: return None
+        # 验证格式防止AI返回乱码
+        datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        return dt_str
+    except Exception as e:
+        print(f"LLM 解析错误: {e}")
+        return now.strftime("%Y-%m-%d 23:59") # 彻底兜底，解析失败也给个今天的日期
 
 def get_tasks():
     conn = sqlite3.connect(DB_FILE)
