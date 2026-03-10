@@ -138,27 +138,20 @@ st.markdown("""
 try:
     init_db()
 
-    # --- Persistent Login Logic (Fixed) ---
+    # --- Persistent Login Logic (Fail-safe) ---
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
 
-    # Get cookie status
+    # Get cookie status (asynchronous)
     auth_cookie = cookie_manager.get("family_system_auth")
     
-    # If cookie is found, auto-login
+    # If cookie is found, auto-login and refresh the page
     if auth_cookie == "authenticated" and not st.session_state["password_correct"]:
         st.session_state["password_correct"] = True
         st.rerun()
 
-    # If not logged in, decide whether to show login screen or wait for cookie
+    # If NOT logged in (neither session state nor cookie), show login UI
     if not st.session_state["password_correct"]:
-        # If the auth_cookie is literally None, it might still be loading from browser
-        if auth_cookie is None:
-            st.markdown("<h3 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🔑 正在验证自动登录状态...</h3>", unsafe_allow_html=True)
-            # Give it a tiny bit of time or just wait for the component's internal rerun
-            st.stop()
-        
-        # If auth_cookie is definitely NOT 'authenticated', show the login UI
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
@@ -170,8 +163,11 @@ try:
                 st.rerun()
             elif pwd:
                 st.error("🚫 密码错误")
-            st.info("💡 提示：密码是6位数字")
-        st.stop()
+            
+            # Subtitle or hint
+            st.info("💡 提示：密码是6位数字。如果页面没有刷新，请手动输入密码。")
+            
+        st.stop() # Only stop the rest of the app from running until logged in
 
     # Sidebar
     with st.sidebar:
