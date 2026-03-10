@@ -1,7 +1,7 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import os
 from openai import OpenAI
@@ -110,6 +110,14 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap');
     .stApp { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); font-family: 'Outfit', sans-serif; }
     .main-header { color: #1e3a8a; text-align: center; font-size: 2rem !important; font-weight: 700; padding: 1rem 0; }
+    .section-header { 
+        color: #1e3a8a; 
+        font-weight: 700; 
+        padding: 1.5rem 0 0.5rem 0; 
+        font-size: 1.2rem;
+        border-bottom: 2px solid #e5e7eb;
+        margin-bottom: 0.5rem;
+    }
     .task-container { background: white; padding: 0.8rem 1rem; border-bottom: 1px solid #eee; transition: background 0.2s; }
     .task-container:hover { background-color: #f9fafb; }
     .todo-text { font-size: 1.1rem !important; color: #1f2937; margin: 0; }
@@ -164,7 +172,12 @@ try:
         if tasks_df.empty:
             st.info("目前没有任务。在侧边栏添加一个吧！")
         else:
-            for _, row in tasks_df.iterrows():
+            now = get_now_sgt()
+            today_date = now.date()
+            # Calculate end of current week (Sunday)
+            end_of_week = today_date + timedelta(days=6 - today_date.weekday())
+            
+            def render_task(row):
                 with st.container():
                     st.markdown('<div class="task-container">', unsafe_allow_html=True)
                     c1, c2, c3 = st.columns([0.05, 0.85, 0.1])
@@ -182,6 +195,45 @@ try:
                         delete_task(row['id'])
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
+
+            # Categorization Logic
+            open_tasks = tasks_df[tasks_df['completed'] == 0]
+            completed_tasks = tasks_df[tasks_df['completed'] == 1]
+            
+            today_list, week_list, later_list = [], [], []
+            
+            for _, row in open_tasks.iterrows():
+                if not row['due_date']:
+                    today_list.append(row)
+                    continue
+                try:
+                    due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
+                    if due_dt <= today_date:
+                        today_list.append(row)
+                    elif due_dt <= end_of_week:
+                        week_list.append(row)
+                    else:
+                        later_list.append(row)
+                except:
+                    today_list.append(row)
+
+            # Display sections
+            if today_list:
+                st.markdown('<div class="section-header">⚡ 今日急需处理</div>', unsafe_allow_html=True)
+                for row in today_list: render_task(row)
+            
+            if week_list:
+                st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
+                for row in week_list: render_task(row)
+                
+            if later_list:
+                st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
+                for row in later_list: render_task(row)
+
+            if not completed_tasks.empty:
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander("✅ 查看已完成事项"):
+                    for _, row in completed_tasks.iterrows(): render_task(row)
 
     with t2:
         cal_url = f"https://calendar.google.com/calendar/embed?src={cal_email}&ctz=Asia%2FSingapore&hl=zh_CN&mode=AGENDA"
