@@ -9,8 +9,15 @@ from dotenv import load_dotenv
 
 # --- Load Environment Variables ---
 load_dotenv()
-# Prioritize st.secrets for Streamlit Cloud, fallback to .env for local
-api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+# Safely prioritize st.secrets for Streamlit Cloud, fallback to .env for local
+try:
+    api_key = st.secrets.get("OPENAI_API_KEY")
+except Exception:
+    api_key = None
+
+if not api_key:
+    api_key = os.getenv("OPENAI_API_KEY")
+
 client = OpenAI(api_key=api_key) if api_key else None
 
 # --- Streamlit UI Config ---
