@@ -9,8 +9,9 @@ from dotenv import load_dotenv
 
 # --- Load Environment Variables ---
 load_dotenv()
-# Ensure using correct OpenAI client initialization
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
+# Prioritize st.secrets for Streamlit Cloud, fallback to .env for local
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key) if api_key else None
 
 # --- Timezone Setup ---
 SGT = pytz.timezone('Asia/Singapore')
@@ -22,6 +23,9 @@ def get_now_sgt():
 DB_FILE = "data/tasks.db"
 
 def init_db():
+    # Ensure the directory exists (CRITICAL for Streamlit Cloud)
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("PRAGMA table_info(tasks)")
