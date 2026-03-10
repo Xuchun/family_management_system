@@ -13,6 +13,14 @@ load_dotenv()
 api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
 
+# --- Streamlit UI Config ---
+st.set_page_config(
+    page_title="家庭事项管理系统",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="auto"
+)
+
 # --- Timezone Setup ---
 SGT = pytz.timezone('Asia/Singapore')
 
@@ -112,17 +120,6 @@ def delete_task(task_id):
     c.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
-
-# --- Streamlit UI Config ---
-st.set_page_config(
-    page_title="家庭事项管理系统",
-    page_icon="🏠",
-    layout="wide",
-    initial_sidebar_state="auto" # Auto handles mobile/desktop better
-)
-
-# --- Initializations ---
-init_db()
 
 # Custom CSS for Mobile & Desktop Premium Look
 st.markdown("""
