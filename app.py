@@ -58,29 +58,38 @@ def init_db():
     conn.close()
 
 def extract_date_llm(task_text):
-    if not client: return None, None
+    if not client: return task_text, None, None
     now = get_now_sgt()
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
-                从用户文本中提取两类信息：
-                1. 具体的单次日期时间：'YYYY-MM-DD HH:MM'。
-                2. 循环模式：'Monday', 'Tuesday'..., 'Everyday', 'Weekend'。
-                返回格式：DATE: YYYY-MM-DD HH:MM | RECUR: Pattern (无循环则为None)"""},
+                从用户文本中解析任务，并返回特定的格式：
+                1. CLEAN_TASK: 任务内容（去除里面的‘明天’、‘下周’等时间词，使显示更简洁）。
+                2. DATE: 截止日期时间 'YYYY-MM-DD HH:MM'。若未提到具体时间，默认为 23:59。务必根据‘今天’的日期准确推算‘明天’、‘后天’等的具体日期。
+                3. RECUR: 循环模式 (Monday, Tuesday..., Everyday, Weekend) 或 None。
+                
+                返回格式示例：CLEAN_TASK: 内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
         )
         res = response.choices[0].message.content.strip()
-        parts = res.split('|')
-        dt_str = parts[0].replace('DATE:', '').strip()
-        recur_str = parts[1].replace('RECUR:', '').strip()
+        
+        # 使用更稳健的解析方式
+        parts = {p.split(':', 1)[0].strip(): p.split(':', 1)[1].strip() for p in res.split('|') if ':' in p}
+        
+        c_task = parts.get("CLEAN_TASK", task_text)
+        dt_str = parts.get("DATE", now.strftime("%Y-%m-%d 23:59"))
+        recur_str = parts.get("RECUR", "None")
+        
+        # 验证日期格式
         datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
-        return dt_str, (recur_str if recur_str != "None" else None)
-    except Exception:
-        return now.strftime("%Y-%m-%d 23:59"), None
+        return c_task, dt_str, (recur_str if recur_str != "None" else None)
+    except Exception as e:
+        print(f"LLM 解析错误: {e}")
+        return task_text, now.strftime("%Y-%m-%d 23:59"), None
 
 def get_tasks():
     conn = sqlite3.connect(DB_FILE)
@@ -90,11 +99,11 @@ def get_tasks():
     return df
 
 def add_task(task_text):
-    due_datetime, recur_pattern = extract_date_llm(task_text)
+    clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
-              (task_text, due_datetime, recur_pattern, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
+              (clean_task, due_datetime, recur_pattern, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
@@ -220,7 +229,7 @@ try:
             else:
                 style = "todo-completed" if row['completed'] else ""
                 recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
-                due_val = f"📅 预计: {row['due_date'][:10]}" if row['due_date'] else ""
+                due_val = f"📅 预计: {row['due_date']}" if row['due_date'] else ""
                 
                 c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_tag}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
                 
