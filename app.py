@@ -399,9 +399,13 @@ try:
     tomorrow_date = today_date + timedelta(days=1)
     end_of_week = today_date + timedelta(days=6 - today_date.weekday())
     
+    # Calculate end of current month
+    next_month = today_date.replace(day=28) + timedelta(days=4)
+    end_of_month = next_month - timedelta(days=next_month.day)
+    
     # Initialize all lists to avoid NameErrors
     recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
-    shadow_today, shadow_tomorrow, shadow_week = [], [], []
+    shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], []
     open_tasks = pd.DataFrame()
     completed_tasks = pd.DataFrame()
 
@@ -432,6 +436,14 @@ try:
             while curr <= end_of_week:
                 if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                 curr += timedelta(days=1)
+                
+            # Scan beyond the current week up to the end of the month
+            curr_later = end_of_week + timedelta(days=1)
+            # Make sure we don't go backwards if end_of_week is already in the next month
+            if curr_later <= end_of_month:
+                while curr_later <= end_of_month:
+                    if hits_day(item['recurring_pattern'], curr_later): shadow_later.append((item, curr_later))
+                    curr_later += timedelta(days=1)
 
     # --- 8. Combine and Sort ---
     # Fetch recurring completions
@@ -480,7 +492,7 @@ try:
     final_today_open, final_today_done = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
     final_tomorrow_open, final_tomorrow_done = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
     final_week_open, final_week_done = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
-    final_later_open, final_later_done = prepare_sorted_list(later_list)
+    final_later_open, final_later_done = prepare_sorted_list(later_list, shadow_items_with_dates=shadow_later)
 
     # Compile all completed shadow tasks for the t3 tab
     all_completed_shadows = final_today_done + final_tomorrow_done + final_week_done + final_later_done
