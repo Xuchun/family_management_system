@@ -223,7 +223,16 @@ try:
     if "editing_task_id" not in st.session_state:
         st.session_state["editing_task_id"] = None
 
-    # 1. 尝试从浏览器读取 Cookie (仅在尚未通过当前会话认证时)
+    # 1. 检测是否是由‘登出’触发的重定向
+    if st.query_params.get("logout") == "1":
+        # 彻底执行物理清除
+        cookie_manager.delete("family_system_auth")
+        st.session_state["authenticated"] = False
+        # 清除查询参数并重刷以获得干净的 URL
+        st.query_params.clear()
+        st.rerun()
+
+    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证时)
     if not st.session_state["authenticated"]:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
@@ -357,10 +366,9 @@ try:
     with st.sidebar:
         st.header("🏠 系统控制")
         if st.button("🔴 退出登录", use_container_width=True):
+            # 将登出意图写入 URL 参数中，作为最强力的全局指令
+            st.query_params["logout"] = "1"
             st.session_state["authenticated"] = False
-            # 强效清除：通过设置一个已过期的日期来强制浏览器删除 Cookie
-            expired_date = datetime.now() - timedelta(days=30)
-            cookie_manager.set("family_system_auth", "logged_out", expires_at=expired_date)
             st.rerun()
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
         st.divider()
