@@ -244,34 +244,35 @@ try:
             st.rerun()
 
     # 2. 如果当前未通过任何方式认证，则显示登录页面
+    login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
-        st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
-        _, col_m, _ = st.columns([1, 2, 1])
-        with col_m:
-            pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
-            if pwd == app_pwd:
-                # 【核心修复】先更新状态并下发写入指令，但不重刷页面
-                st.session_state["authenticated"] = True
-                cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
-                st.success("✅ 登录成功！正在为您开启系统...")
-                # 此处不使用 st.stop()，让程序继续向下运行，从而渲染主界面
-            elif pwd:
-                st.error("🚫 密码错误")
+        with login_placeholder.container():
+            st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
+            _, col_m, _ = st.columns([1, 2, 1])
+            with col_m:
+                pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
+                if pwd == app_pwd:
+                    st.session_state["authenticated"] = True
+                    cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
+                    st.success("✅ 登录成功！正在为您开启系统...")
+                elif pwd:
+                    st.error("🚫 密码错误")
+                
+                st.info("💡 提示：密码是6位数字。")
+                st.warning("⚠️ 如果您是 Safari 浏览器用户：请确保已关闭‘阻止所有 Cookie’或‘阻止跨站追踪’设置，否则系统无法保持登录。")
             
-            st.info("💡 提示：密码是6位数字。")
-            st.warning("⚠️ 如果您是 Safari 浏览器用户：请确保已关闭‘阻止所有 Cookie’或‘阻止跨站追踪’设置，否则系统无法保持登录。")
-        
-        # 如果依然没通过认证（比如密码没输对），则阻断后续显示
-        if not st.session_state["authenticated"]:
-            if just_logged_out:
-                # [终极物理隔离] 由于 st.stop() 会强行中断后续组件通信，导致常规 Cookie 写入失败，
-                # 这里发送一个原生 HTML/JS Iframe，直接向上层父域精准打击并摧毁认证信息。
-                import streamlit.components.v1 as components
-                components.html(
-                    "<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>",
-                    height=0
-                )
-            st.stop()
+    # 一旦认证成功，如果原本显示了登录界面，现在将其清空
+    if st.session_state["authenticated"]:
+        login_placeholder.empty()
+    else:
+        # 否则阻断后续显示
+        if just_logged_out:
+            import streamlit.components.v1 as components
+            components.html(
+                "<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>",
+                height=0
+            )
+        st.stop()
 
     # --- 🛠️ 辅助 UI 函数 ---
     def hits_day(pattern, target_date):
