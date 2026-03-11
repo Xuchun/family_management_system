@@ -272,49 +272,7 @@ try:
         if p == 'Weekend' and target_date.weekday() >= 5: return True
         return p == target_date.strftime('%A')
 
-    def format_tasks_to_txt(df):
-        if df.empty:
-            return "没有任务数据。"
-        # 表格表头
-        header = f"{'截止时间':<20} | {'任务内容':<50} | {'循环':<15} | {'状态':<10}\n"
-        sep = "-" * 100 + "\n"
-        lines = [header, sep]
-        
-        # 按照完成状态和日期排序
-        sorted_df = df.sort_values(by=['completed', 'due_date'], ascending=[True, True])
-        
-        today_date = get_now_sgt().date()
-        printed_any = False
-        added_split = False
-        
-        for _, row in sorted_df.iterrows():
-            is_completed = row['completed']
-            dt_str = row['due_date']
-            
-            # 检测是否跨越了“今日以内待办”的边界
-            if not added_split and printed_any:
-                is_future = False
-                if not is_completed and dt_str:
-                    try:
-                        task_date = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").date()
-                        if task_date > today_date:
-                            is_future = True
-                    except:
-                        pass
-                
-                # 如果当前任务是将来的任务或者是已完成的任务，就在它前面插入空行
-                if is_future or is_completed:
-                    lines.append("\n")
-                    added_split = True
-            
-            due = dt_str if pd.notna(dt_str) and dt_str else "未设置"
-            task = row['task'].replace('\n', ' ')
-            recur = row['recurring_pattern'] if row['recurring_pattern'] else "无"
-            status = "✅ 已完成" if is_completed else "⏳ 待办"
-            lines.append(f"{due:<20} | {task:<50} | {recur:<15} | {status:<10}\n")
-            printed_any = True
-        
-        return "".join(lines)
+
 
     @st.dialog("📋 事项添加结果")
     def show_add_dialog(result):
@@ -543,10 +501,43 @@ try:
     # Header Row
     c_title, c_dl = st.columns([0.72, 0.28])
     with c_title:
-        st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 class='main-header'>🏠 家庭事项管理系统</h1>", unsafe_allow_html=True)
     with c_dl:
+        def generate_txt_report():
+            lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
+            
+            def add_section(title, task_list):
+                # Ensure we handle DataFrame vs List of Dicts properly
+                if isinstance(task_list, pd.DataFrame):
+                    if task_list.empty: return
+                    iterable = [row.to_dict() for _, row in task_list.iterrows()]
+                else:
+                    if not task_list: return
+                    iterable = task_list
+
+                lines.append(f"【{title}】\n")
+                lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
+                lines.append("-" * 80 + "\n")
+                
+                for row in iterable:
+                    _due_raw = str(row.get('due_date', ''))
+                    due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
+                    task = str(row.get('task', '')).replace('\n', ' ')
+                    recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
+                    lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
+                lines.append("\n")
+
+            add_section("⚡ 今日急需处理", final_today_open)
+            add_section("🌙 明日事项", final_tomorrow_open)
+            add_section("🗓️ 本周剩余事项", final_week_open)
+            add_section("⏳ 本月剩余事项", final_later_open)
+            add_section("🔄 长期循环事项", recurring_list)
+            add_section("✅ 已完成事项归档", completed_tasks)
+            
+            return "".join(lines) if len(lines) > 2 else "没有任务数据。"
+
         if not tasks_df.empty:
-            txt_content = format_tasks_to_txt(tasks_df)
+            txt_content = generate_txt_report()
             st.download_button(
                 label="📥 下载任务列表 (TXT)",
                 data=txt_content,
