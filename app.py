@@ -223,16 +223,18 @@ try:
     if "editing_task_id" not in st.session_state:
         st.session_state["editing_task_id"] = None
 
-    # 1. 检测是否是由‘登出’触发的重定向
-    is_logging_out = st.query_params.get("logout") == "1"
-    if is_logging_out:
-        # 彻底执行物理清除 (此处不可调用 st.rerun，否则删除脚本无法发送给浏览器)
+    if "logout_requested" not in st.session_state:
+        st.session_state["logout_requested"] = False
+
+    # 1. 拦截登出请求并优先处理
+    if st.session_state["logout_requested"]:
+        # 此处的 delete 会被作为组件指令安全地下发到前端
         cookie_manager.delete("family_system_auth")
         st.session_state["authenticated"] = False
-        st.query_params.clear()
+        st.session_state["logout_requested"] = False
 
-    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证且不在登出动作中时)
-    if not st.session_state["authenticated"] and not is_logging_out:
+    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证时)
+    if not st.session_state["authenticated"]:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
             st.session_state["authenticated"] = True
@@ -364,11 +366,12 @@ try:
     # Sidebar
     with st.sidebar:
         st.header("🏠 系统控制")
-        if st.button("🔴 退出登录", use_container_width=True):
-            # 将登出意图写入 URL 参数中，作为最强力的全局指令
-            st.query_params["logout"] = "1"
-            st.session_state["authenticated"] = False
-            st.rerun()
+        
+        def handle_logout():
+            st.session_state["logout_requested"] = True
+            
+        st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
+        
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
         st.divider()
         def handle_add_cb():
