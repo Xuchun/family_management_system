@@ -376,9 +376,7 @@ try:
                         st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # Sidebar
-    with st.sidebar:
-        st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
+
 
     # --- 7. Data Preparation ---
     tasks_df = get_tasks()
@@ -521,69 +519,69 @@ try:
         st.session_state["logout_requested"] = True
 
     # Header Row
-    c_title, c_dl, c_logout = st.columns([0.65, 0.20, 0.15])
+    c_title, c_logout = st.columns([0.85, 0.15])
     with c_title:
         st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
-    with c_dl:
-        def generate_txt_report():
-            lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
+
+    def generate_txt_report():
+        lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
+        
+        def add_section(title, task_list):
+            # Ensure we handle DataFrame vs List of Dicts properly
+            if isinstance(task_list, pd.DataFrame):
+                if task_list.empty: return
+                iterable = [row.to_dict() for _, row in task_list.iterrows()]
+            else:
+                if not task_list: return
+                iterable = task_list
+
+            lines.append(f"【{title}】\n")
+            lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
+            lines.append("-" * 80 + "\n")
             
-            def add_section(title, task_list):
-                # Ensure we handle DataFrame vs List of Dicts properly
-                if isinstance(task_list, pd.DataFrame):
-                    if task_list.empty: return
-                    iterable = [row.to_dict() for _, row in task_list.iterrows()]
-                else:
-                    if not task_list: return
-                    iterable = task_list
+            for row in iterable:
+                _due_raw = str(row.get('due_date', ''))
+                due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
+                task = str(row.get('task', '')).replace('\n', ' ')
+                recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
+                lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
+            lines.append("\n")
 
-                lines.append(f"【{title}】\n")
-                lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
-                lines.append("-" * 80 + "\n")
-                
-                for row in iterable:
-                    _due_raw = str(row.get('due_date', ''))
-                    due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
-                    task = str(row.get('task', '')).replace('\n', ' ')
-                    recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
-                    lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
-                lines.append("\n")
+        add_section("⚡ 今日急需处理", final_today_open)
+        add_section("🌙 明日事项", final_tomorrow_open)
+        add_section("🗓️ 本周剩余事项", final_week_open)
+        add_section("⏳ 本月剩余事项", final_later_open)
+        add_section("🔄 长期循环事项", recurring_list)
+        add_section("✅ 已完成事项归档", completed_tasks)
+        
+        return "".join(lines) if len(lines) > 2 else "没有任务数据。"
 
-            add_section("⚡ 今日急需处理", final_today_open)
-            add_section("🌙 明日事项", final_tomorrow_open)
-            add_section("🗓️ 本周剩余事项", final_week_open)
-            add_section("⏳ 本月剩余事项", final_later_open)
-            add_section("🔄 长期循环事项", recurring_list)
-            add_section("✅ 已完成事项归档", completed_tasks)
-            
-            return "".join(lines) if len(lines) > 2 else "没有任务数据。"
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Add Task Section & Download
+    def handle_add_cb():
+        st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
+        st.session_state["input_new_task"] = ""
 
+    col_add_input, col_add_btn, col_dl_btn = st.columns([0.60, 0.17, 0.23])
+    with col_add_input:
+        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task", label_visibility="collapsed")
+    with col_add_btn:
+        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
+            pass
+    with col_dl_btn:
         if not tasks_df.empty:
             txt_content = generate_txt_report()
             st.download_button(
-                label="📥 下载文本",
+                label="📥 下载待办事项清单",
                 data=txt_content,
                 file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                 mime="text/plain",
                 key="dl_btn_header_v1",
                 use_container_width=True
             )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Add Task Section
-    def handle_add_cb():
-        st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
-        st.session_state["input_new_task"] = ""
-
-    col_add_input, col_add_btn = st.columns([0.85, 0.15])
-    with col_add_input:
-        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task", label_visibility="collapsed")
-    with col_add_btn:
-        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
-            pass
 
     task_to_add = st.session_state.get("temp_task_text")
     if task_to_add:
