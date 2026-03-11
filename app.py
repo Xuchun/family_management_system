@@ -18,7 +18,7 @@ st.set_page_config(
 
 # --- 2. Cookie Management ---
 # Cookie 管理器初始化 (不可使用 @st.cache_resource，因为它是 UI 组件)
-cookie_manager = stx.CookieManager()
+cookie_manager = stx.CookieManager(key="auth_cookie_manager")
 
 # --- 3. Environment & Global Config ---
 load_dotenv()
@@ -229,8 +229,9 @@ try:
     just_logged_out = False
     # 1. 拦截登出请求并优先处理
     if st.session_state["logout_requested"]:
-        # 此处的 delete 会被作为组件指令安全地下发到前端
-        cookie_manager.delete("family_system_auth")
+        # 核心漏洞修复：extra_streamlit_components 的 delete() 方法由于缺少 path=/ 参数，
+        # 会在部分浏览器或场景下静默失败。强制使用 set() 并附带过去的时间戳进行底层物理覆写。
+        cookie_manager.set("family_system_auth", "", expires_at=datetime.now() - timedelta(days=365))
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
         just_logged_out = True
@@ -262,6 +263,14 @@ try:
         
         # 如果依然没通过认证（比如密码没输对），则阻断后续显示
         if not st.session_state["authenticated"]:
+            if just_logged_out:
+                # [终极物理隔离] 由于 st.stop() 会强行中断后续组件通信，导致常规 Cookie 写入失败，
+                # 这里发送一个原生 HTML/JS Iframe，直接向上层父域精准打击并摧毁认证信息。
+                import streamlit.components.v1 as components
+                components.html(
+                    "<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>",
+                    height=0
+                )
             st.stop()
 
     # --- 🛠️ 辅助 UI 函数 ---
