@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
-    page_title="家庭事项管理系统",
+    page_title="家庭管理系统",
     page_icon="🏠",
     layout="wide",
     initial_sidebar_state="auto"
@@ -542,7 +542,7 @@ try:
     # Header Row
     c_title, c_dl = st.columns([0.72, 0.28])
     with c_title:
-        st.markdown("<h1 class='main-header'>🏠 家庭事项管理系统</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
     with c_dl:
         def generate_txt_report():
             lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
