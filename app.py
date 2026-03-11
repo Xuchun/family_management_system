@@ -222,9 +222,11 @@ try:
         st.session_state["authenticated"] = False
     if "editing_task_id" not in st.session_state:
         st.session_state["editing_task_id"] = None
+    if "logout_active" not in st.session_state:
+        st.session_state["logout_active"] = False
 
-    # 1. 尝试从浏览器读取 Cookie (仅在尚未通过当前会话认证时)
-    if not st.session_state["authenticated"]:
+    # 1. 尝试从浏览器读取 Cookie (仅在尚未通过当前会话认证 且 不是刚点过登出时)
+    if not st.session_state["authenticated"] and not st.session_state["logout_active"]:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
             st.session_state["authenticated"] = True
@@ -232,6 +234,8 @@ try:
 
     # 2. 如果当前未通过任何方式认证，则显示登录页面
     if not st.session_state["authenticated"]:
+        # 既然已经到了显示登录页的阶段，确保重置登出标记，允许下次进入页面时自动登录
+        st.session_state["logout_active"] = False
         st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭系统登录</h2>", unsafe_allow_html=True)
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
@@ -357,6 +361,7 @@ try:
     with st.sidebar:
         st.header("🏠 系统控制")
         if st.button("🔴 退出登录", use_container_width=True):
+            st.session_state["logout_active"] = True
             st.session_state["authenticated"] = False
             cookie_manager.delete("family_system_auth")
             st.rerun()
