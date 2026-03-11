@@ -599,7 +599,7 @@ try:
                 
             if final_later_open:
                 st.markdown('<div class="section-header">⏳ 本月剩余事项</div>', unsafe_allow_html=True)
-                for row in final_later_open: render_task(row, location="final_later")
+                for row in final_later_open: render_task(row, is_shadow=row['_is_shadow'], location="final_later")
 
     with t2:
         st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
