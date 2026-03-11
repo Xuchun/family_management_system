@@ -283,12 +283,36 @@ try:
         # 按照完成状态和日期排序
         sorted_df = df.sort_values(by=['completed', 'due_date'], ascending=[True, True])
         
+        today_date = get_now_sgt().date()
+        printed_any = False
+        added_split = False
+        
         for _, row in sorted_df.iterrows():
-            due = row['due_date'] if row['due_date'] else "未设置"
+            is_completed = row['completed']
+            dt_str = row['due_date']
+            
+            # 检测是否跨越了“今日以内待办”的边界
+            if not added_split and printed_any:
+                is_future = False
+                if not is_completed and dt_str:
+                    try:
+                        task_date = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").date()
+                        if task_date > today_date:
+                            is_future = True
+                    except:
+                        pass
+                
+                # 如果当前任务是将来的任务或者是已完成的任务，就在它前面插入空行
+                if is_future or is_completed:
+                    lines.append("\n")
+                    added_split = True
+            
+            due = dt_str if pd.notna(dt_str) and dt_str else "未设置"
             task = row['task'].replace('\n', ' ')
             recur = row['recurring_pattern'] if row['recurring_pattern'] else "无"
-            status = "✅ 已完成" if row['completed'] else "⏳ 待办"
+            status = "✅ 已完成" if is_completed else "⏳ 待办"
             lines.append(f"{due:<20} | {task:<50} | {recur:<15} | {status:<10}\n")
+            printed_any = True
         
         return "".join(lines)
 
@@ -298,7 +322,7 @@ try:
             st.success("✅ 该事项已成功入库！")
             st.markdown(f"**内容：** {result['task']}")
             if result['due']:
-                st.markdown(f"**⏰ 预计执行时间：** {result['due']}")
+                st.markdown(f"**⏰ 日期/时间：** {result['due']}")
             if result['recur']:
                 st.markdown(f"**🔄 循环模式：** {result['recur']}")
         else:
@@ -351,7 +375,7 @@ try:
             else:
                 style = "todo-completed" if row['completed'] else ""
                 recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
-                due_val = f"📅 预计: {row['due_date']}" if row['due_date'] else ""
+                due_val = f"📅 日期/时间: {row['due_date']}" if row['due_date'] else ""
                 
                 c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_tag}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
                 
@@ -531,7 +555,7 @@ try:
                 key="dl_btn_header_v1"
             )
 
-    t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
+    t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"])
 
     with t1:
         if tasks_df.empty:
