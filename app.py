@@ -393,53 +393,46 @@ try:
     final_week = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
     final_later = prepare_sorted_list(later_list)
 
-    # Main Interface
-    st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
-
-    # CSS to style the download button to match tab labels (approx 14px)
+    # CSS to style the download button in the header
     st.markdown("""
         <style>
         div.stDownloadButton > button {
-            font-size: 14px !important;
-            font-weight: 400 !important;
-            color: #31333F !important;
-            background-color: transparent !important;
+            font-size: 15px !important;
+            font-weight: 500 !important;
+            color: #444 !important;
+            background-color: #f0f2f6 !important;
             border: 1px solid #dcdde1 !important;
-            padding: 4px 10px !important;
-            height: 32px !important;
-            margin-top: 0px !important;
-            border-radius: 4px !important;
+            padding: 6px 12px !important;
+            height: 42px !important;
+            margin-top: 30px !important; /* Align with H1 baselineish */
+            border-radius: 8px !important;
             transition: all 0.2s ease !important;
-            display: inline-flex !important;
-            align-items: center !important;
         }
         div.stDownloadButton > button:hover {
             color: #ef4444 !important;
             border-color: #ef4444 !important;
-            background-color: #fff5f5 !important;
-        }
-        /* Tighten the gap between columns */
-        div[data-testid="stHorizontalBlock"] {
-            gap: 1rem !important;
+            background-color: #ffffff !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([0.48, 0.52])
-    with col1:
-        t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
-    with col2:
-        # Spacer to align with tab row headers vertically
-        st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
+    # Header Row
+    c_title, c_dl = st.columns([0.72, 0.28])
+    with c_title:
+        st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
+    with c_dl:
         if not tasks_df.empty:
             txt_content = format_tasks_to_txt(tasks_df)
             st.download_button(
-                label="📁 下载任务报表 (TXT)",
+                label="📥 下载任务列表 (TXT)",
                 data=txt_content,
                 file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                 mime="text/plain",
-                key="dl_btn_v4_final"
+                key="dl_btn_header_v1"
             )
+
+    t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
 
     with t1:
         if tasks_df.empty:
