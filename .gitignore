@@ -11,7 +11,8 @@ dist/
 *.egg-info/
 
 # Local Data (SQLite DB)
-# data/
+data/
+*.db
 
 # IDE
 .vscode/
