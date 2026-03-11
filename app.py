@@ -519,11 +519,11 @@ try:
         st.session_state["logout_requested"] = True
 
     # Header Row
-    c_title, c_logout = st.columns([0.85, 0.15])
-    with c_title:
-        st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
+    c_logout, c_title = st.columns([0.15, 0.85], vertical_alignment="bottom")
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
+    with c_title:
+        st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
 
     def generate_txt_report():
         lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
