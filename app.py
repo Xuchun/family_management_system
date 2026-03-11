@@ -7,8 +7,6 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 import extra_streamlit_components as stx
-import json
-import calendar_sync
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -35,7 +33,6 @@ SGT = pytz.timezone('Asia/Singapore')
 def get_now_sgt():
     return datetime.now(SGT)
 
-# Ensure data directory exists
 if not os.path.exists("data"):
     os.makedirs("data")
 DB_FILE = "data/tasks.db"
@@ -59,8 +56,6 @@ def init_db():
             c.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
         if 'recurring_pattern' not in columns:
             c.execute("ALTER TABLE tasks ADD COLUMN recurring_pattern TEXT")
-        if 'google_event_id' not in columns:
-            c.execute("ALTER TABLE tasks ADD COLUMN google_event_id TEXT")
     conn.commit()
     conn.close()
 
@@ -105,86 +100,35 @@ def get_tasks():
     conn.close()
     return df
 
-def add_task(task_text, cal_email=None, sync_enabled=False):
+def add_task(task_text):
     clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
-    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
               (clean_task, due_datetime, recur_pattern, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
-    task_id = c.lastrowid
     conn.commit()
     conn.close()
 
-    if sync_enabled and cal_email:
-        event_id = calendar_sync.upsert_calendar_event(task_id, clean_task, due_datetime, None, cal_email)
-        if event_id:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute("UPDATE tasks SET google_event_id = ? WHERE id = ?", (event_id, task_id))
-            conn.commit()
-            conn.close()
-
-def update_task_status(task_id, completed, cal_email=None, sync_enabled=False):
+def update_task_status(task_id, completed):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT task, due_date, google_event_id FROM tasks WHERE id = ?", (task_id,))
-    task_data = c.fetchone()
     c.execute("UPDATE tasks SET completed = ? WHERE id = ?", (completed, task_id))
     conn.commit()
     conn.close()
 
-    if sync_enabled and cal_email and task_data:
-        g_id = task_data[2]
-        if completed:
-            # 如果标记为完成，则从日历删除
-            calendar_sync.delete_calendar_event(g_id, cal_email)
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute("UPDATE tasks SET google_event_id = NULL WHERE id = ?", (task_id,))
-            conn.commit()
-            conn.close()
-        elif not completed:
-            # 如果取消勾选，则重新同步到日历
-            event_id = calendar_sync.upsert_calendar_event(task_id, task_data[0], task_data[1], None, cal_email)
-            if event_id:
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                c.execute("UPDATE tasks SET google_event_id = ? WHERE id = ?", (event_id, task_id))
-                conn.commit()
-                conn.close()
-
-def delete_task(task_id, cal_email=None, sync_enabled=False):
+def delete_task(task_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT google_event_id FROM tasks WHERE id = ?", (task_id,))
-    row = c.fetchone()
-    g_id = row[0] if row else None
     c.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
 
-    if sync_enabled and cal_email and g_id:
-        calendar_sync.delete_calendar_event(g_id, cal_email)
-
-def update_task_text(task_id, new_text, cal_email=None, sync_enabled=False):
+def update_task_text(task_id, new_text):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT due_date, google_event_id FROM tasks WHERE id = ?", (task_id,))
-    row = c.fetchone()
     c.execute("UPDATE tasks SET task = ? WHERE id = ?", (new_text, task_id))
     conn.commit()
     conn.close()
-
-    if sync_enabled and cal_email and row:
-        due_date, g_id = row
-        new_g_id = calendar_sync.upsert_calendar_event(task_id, new_text, due_date, g_id, cal_email)
-        if new_g_id and new_g_id != g_id:
-            conn = sqlite3.connect(DB_FILE)
-            c = conn.cursor()
-            c.execute("UPDATE tasks SET google_event_id = ? WHERE id = ?", (new_g_id, task_id))
-            conn.commit()
-            conn.close()
 
 # --- 5. UI Styling ---
 st.markdown("""
@@ -268,7 +212,7 @@ try:
             if not is_shadow:
                 is_comp = c1.checkbox("", value=row['completed'], key=key_id)
                 if is_comp != row['completed']:
-                    update_task_status(row['id'], is_comp, cal_email, sync_enabled)
+                    update_task_status(row['id'], is_comp)
                     st.rerun()
             else:
                 c1.markdown("🔄")
@@ -278,7 +222,7 @@ try:
                 new_text = c2.text_input("修改事项:", value=row['task'], key=f"inp_{location}_{row['id']}")
                 save_col, can_col = c3.columns(2)
                 if save_col.button("💾", key=f"save_{location}_{row['id']}", help="保存"):
-                    update_task_text(row['id'], new_text, cal_email, sync_enabled)
+                    update_task_text(row['id'], new_text)
                     st.session_state["editing_task_id"] = None
                     st.rerun()
                 if can_col.button("🚫", key=f"can_{location}_{row['id']}", help="取消"):
@@ -297,20 +241,13 @@ try:
                         st.session_state["editing_task_id"] = row['id']
                         st.rerun()
                     if del_col.button("🗑️", key=del_id, help="删除"):
-                        delete_task(row['id'], cal_email, sync_enabled)
+                        delete_task(row['id'])
                         st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
         st.header("🏠 系统控制")
-        
-        st.markdown("### 📅 日历配置")
-        cal_email = st.text_input("Google Email:", value="xuchunli@gmail.com")
-        sync_enabled = st.checkbox("同步到 Google 日历", value=False)
-        if sync_enabled:
-            st.caption("请确保 root 目录下存在 service_account.json 或在 Secrets 中配置凭据。")
-
         if st.button("🔴 退出登录", use_container_width=True):
             del st.session_state["password_correct"]
             cookie_manager.delete("family_system_auth")
@@ -321,10 +258,9 @@ try:
         if st.button("立即添加", use_container_width=True):
             if new_task:
                 with st.spinner("AI 解析中..."):
-                    add_task(new_task, cal_email, sync_enabled)
+                    add_task(new_task)
                 st.rerun()
 
-    # Main Interface
     # --- 7. Data Preparation ---
     tasks_df = get_tasks()
     now = get_now_sgt()
@@ -368,12 +304,13 @@ try:
 
     # Main Interface
     st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
-    t1, t2, t3, t4 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项", "📅 家庭日历"])
+    t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
 
     with t1:
         if tasks_df.empty:
             st.info("目前没有任务。在侧边栏添加一个吧！")
         else:
+
             # --- Displays Tab 1 ---
             if today_list or shadow_today:
                 st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
@@ -413,9 +350,6 @@ try:
             for _, row in completed_tasks.iterrows():
                 render_task(row, location="comp_tab")
 
-    with t4:
-        cal_url = f"https://calendar.google.com/calendar/embed?src={cal_email}&ctz=Asia%2FSingapore&hl=zh_CN&mode=AGENDA"
-        st.components.v1.iframe(cal_url, height=700, scrolling=True)
 
     st.markdown("---")
     st.markdown(f"<p style='text-align: center; color: #888;'>最后更新: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}</p>", unsafe_allow_html=True)
