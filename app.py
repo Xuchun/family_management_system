@@ -394,10 +394,36 @@ try:
     final_later = prepare_sorted_list(later_list)
 
     # Main Interface
-    c_title, c_btn = st.columns([0.7, 0.3])
-    with c_title:
-        st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
-    with c_btn:
+    st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
+
+    # CSS to style the download button to match tab labels (approx 14px/16px)
+    st.markdown("""
+        <style>
+        div.stDownloadButton > button {
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            color: #555 !important;
+            background-color: #f8f9fa !important;
+            border: 1px solid #e9ecef !important;
+            padding: 5px 15px !important;
+            height: 38px !important;
+            border-radius: 6px !important;
+            margin-top: 48px !important; /* Offset to align with tab labels */
+            transition: all 0.2s ease !important;
+        }
+        div.stDownloadButton > button:hover {
+            color: #ef4444 !important;
+            border-color: #ef4444 !important;
+            background-color: #fff !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    c_tabs, c_dl = st.columns([0.76, 0.24])
+    with c_tabs:
+        t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
+    with c_dl:
         if not tasks_df.empty:
             txt_content = format_tasks_to_txt(tasks_df)
             st.download_button(
@@ -405,10 +431,8 @@ try:
                 data=txt_content,
                 file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                 mime="text/plain",
-                key="dl_btn"
+                key="dl_btn_v3"
             )
-
-    t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
 
     with t1:
         if tasks_df.empty:
