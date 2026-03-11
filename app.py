@@ -293,13 +293,23 @@ try:
 
 
 
+    def format_date_with_weekday(dt_str):
+        if not dt_str: return ""
+        try:
+            # First try parsing the standard format
+            dt = datetime.strptime(dt_str[:16], "%Y-%m-%d %H:%M")
+            weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+            return f"{dt_str[:16]} {weekdays[dt.weekday()]}"
+        except:
+            return dt_str
+
     @st.dialog("📋 事项添加结果")
     def show_add_dialog(result):
         if result["success"]:
             st.success("✅ 该事项已成功入库！")
             st.markdown(f"**内容：** {result['task']}")
             if result['due']:
-                st.markdown(f"**⏰ 日期/时间：** {result['due']}")
+                st.markdown(f"**⏰ 日期/时间：** {format_date_with_weekday(result['due'])}")
             if result['recur']:
                 st.markdown(f"**🔄 循环模式：** {result['recur']}")
         else:
@@ -352,7 +362,7 @@ try:
             else:
                 style = "todo-completed" if row['completed'] else ""
                 recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
-                due_val = f"📅 日期/时间: {row['due_date']}" if row['due_date'] else ""
+                due_val = f"📅 日期/时间: {format_date_with_weekday(row['due_date'])}" if row['due_date'] else ""
                 
                 c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_tag}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
                 
