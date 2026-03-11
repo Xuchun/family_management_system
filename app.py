@@ -101,13 +101,27 @@ def get_tasks():
     return df
 
 def add_task(task_text):
-    clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
-              (clean_task, due_datetime, recur_pattern, get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
+    try:
+        clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
+        now_str = get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
+                  (clean_task, due_datetime, recur_pattern, now_str))
+        task_id = c.lastrowid
+        conn.commit()
+        
+        # Verify insertion
+        c.execute("SELECT task, due_date FROM tasks WHERE id = ?", (task_id,))
+        row = c.fetchone()
+        conn.close()
+        
+        if row:
+            return {"success": True, "task": row[0], "due": row[1], "recur": recur_pattern}
+        else:
+            return {"success": False, "error": "数据库验证插入失败。"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def update_task_status(task_id, completed):
     conn = sqlite3.connect(DB_FILE)
@@ -219,6 +233,24 @@ try:
         
         return "".join(lines)
 
+    @st.dialog("📋 事项添加结果")
+    def show_add_dialog(result):
+        if result["success"]:
+            st.success("✅ 该事项已成功入库！")
+            st.markdown(f"**内容：** {result['task']}")
+            if result['due']:
+                st.markdown(f"**⏰ 预计执行时间：** {result['due']}")
+            if result['recur']:
+                st.markdown(f"**🔄 循环模式：** {result['recur']}")
+        else:
+            st.error(f"❌ 添加失败：{result['error']}")
+        
+        if st.button("确定", use_container_width=True):
+            st.rerun()
+
+    if "last_add_result" in st.session_state:
+        show_add_dialog(st.session_state.pop("last_add_result"))
+
     def render_task(row, is_shadow=False, location="main"):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
         del_id = f"{location}_d_{row['id']}"
@@ -277,9 +309,10 @@ try:
         new_task = st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...")
         if st.button("立即添加", use_container_width=True):
             if new_task:
-                with st.spinner("AI 解析中..."):
-                    add_task(new_task)
-                st.rerun()
+                with st.spinner("AI 解析并提交中..."):
+                    res = add_task(new_task)
+                    st.session_state["last_add_result"] = res
+                    st.rerun()
 
     # --- 7. Data Preparation ---
     tasks_df = get_tasks()
