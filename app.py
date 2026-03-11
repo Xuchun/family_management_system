@@ -357,7 +357,7 @@ try:
     with st.sidebar:
         st.header("🏠 系统控制")
         if st.button("🔴 退出登录", use_container_width=True):
-            del st.session_state["password_correct"]
+            st.session_state["authenticated"] = False
             cookie_manager.delete("family_system_auth")
             st.rerun()
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
