@@ -24,8 +24,10 @@ cookie_manager = stx.CookieManager()
 load_dotenv()
 try:
     api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
+    app_pwd = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else os.getenv("APP_PASSWORD")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
+    app_pwd = os.getenv("APP_PASSWORD")
 
 client = OpenAI(api_key=api_key) if api_key else None
 SGT = pytz.timezone('Asia/Singapore')
@@ -234,7 +236,7 @@ try:
         _, col_m, _ = st.columns([1, 2, 1])
         with col_m:
             pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
-            if pwd == "790228":
+            if pwd == app_pwd:
                 # 【核心修复】先更新状态并下发写入指令，但不重刷页面
                 st.session_state["authenticated"] = True
                 cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
