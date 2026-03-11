@@ -56,6 +56,12 @@ def init_db():
             c.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
         if 'recurring_pattern' not in columns:
             c.execute("ALTER TABLE tasks ADD COLUMN recurring_pattern TEXT")
+    
+    # New table for individual recurring task completions
+    c.execute('''CREATE TABLE IF NOT EXISTS recurring_completions
+                 (task_id INTEGER, 
+                  completed_date TEXT,
+                  PRIMARY KEY (task_id, completed_date))''')
     conn.commit()
     conn.close()
 
@@ -143,6 +149,29 @@ def update_task_text(task_id, new_text):
     c.execute("UPDATE tasks SET task = ? WHERE id = ?", (new_text, task_id))
     conn.commit()
     conn.close()
+
+def mark_recurring_date_completed(task_id, date_str):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO recurring_completions (task_id, completed_date) VALUES (?, ?)", (task_id, date_str))
+    conn.commit()
+    conn.close()
+
+def unmark_recurring_date_completed(task_id, date_str):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM recurring_completions WHERE task_id = ? AND completed_date = ?", (task_id, date_str))
+    conn.commit()
+    conn.close()
+
+def get_recurring_completions():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        df = pd.read_sql_query("SELECT * FROM recurring_completions", conn)
+        conn.close()
+        return df
+    except:
+        return pd.DataFrame(columns=['task_id', 'completed_date'])
 
 # --- 5. UI Styling ---
 st.markdown("""
@@ -267,7 +296,16 @@ try:
                     update_task_status(row['id'], is_comp)
                     st.rerun()
             else:
-                c1.markdown("🔄")
+                # Shadow task checkbox
+                is_comp = c1.checkbox("", value=row.get('completed', 0), key=key_id)
+                if is_comp != row.get('completed', 0):
+                    # For shadow tasks, we use the date from 'due_date' (YYYY-MM-DD HH:MM)
+                    date_only = row['due_date'][:10]
+                    if is_comp:
+                        mark_recurring_date_completed(row['id'], date_only)
+                    else:
+                        unmark_recurring_date_completed(row['id'], date_only)
+                    st.rerun()
                 
             # Handle inline edit
             if st.session_state.get("editing_task_id") == row['id']:
@@ -363,6 +401,9 @@ try:
                 curr += timedelta(days=1)
 
     # --- 8. Combine and Sort ---
+    # Fetch recurring completions
+    recur_comps = get_recurring_completions()
+    
     def prepare_sorted_list(normal_items, shadow_items_with_dates=None, shadow_items_plain=None, default_date=None):
         combined = []
         for r in normal_items:
@@ -370,29 +411,55 @@ try:
             temp['_is_shadow'] = False
             combined.append(temp)
         
+        # Helper to check if a specific task/date is completed
+        def is_done(tid, d_str):
+            if recur_comps.empty: return False
+            return not recur_comps[(recur_comps['task_id'] == tid) & (recur_comps['completed_date'] == d_str[:10])].empty
+
         if shadow_items_plain and default_date:
+            d_str = default_date.strftime("%Y-%m-%d")
             for r in shadow_items_plain:
                 temp = r.copy()
                 temp['_is_shadow'] = True
-                temp['due_date'] = default_date.strftime("%Y-%m-%d 12:00")
+                temp['due_date'] = f"{d_str} 12:00"
+                temp['completed'] = 1 if is_done(r['id'], d_str) else 0
                 combined.append(temp)
         
         if shadow_items_with_dates:
             for r, d in shadow_items_with_dates:
+                d_str = d.strftime("%Y-%m-%d")
                 temp = r.copy()
                 temp['_is_shadow'] = True
-                temp['due_date'] = d.strftime("%Y-%m-%d 12:00")
+                temp['due_date'] = f"{d_str} 12:00"
+                temp['completed'] = 1 if is_done(r['id'], d_str) else 0
                 combined.append(temp)
         
-        # Sort by due_date
-        combined.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
-        return combined
+        # Separate open and completed within each list
+        open_list = [x for x in combined if not x['completed']]
+        done_list = [x for x in combined if x['completed']]
+        
+        # Sort each
+        open_list.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
+        done_list.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
+        
+        return open_list, done_list
 
-    final_today = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
-    final_tomorrow = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
-    final_week = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
-    final_later = prepare_sorted_list(later_list)
+    final_today_open, final_today_done = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
+    final_tomorrow_open, final_tomorrow_done = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
+    final_week_open, final_week_done = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
+    final_later_open, final_later_done = prepare_sorted_list(later_list)
 
+    # Compile all completed shadow tasks for the t3 tab
+    all_completed_shadows = final_today_done + final_tomorrow_done + final_week_done + final_later_done
+    if all_completed_shadows:
+        shadows_df = pd.DataFrame(all_completed_shadows)
+        # Update display titles for completed shadow tasks to include individual dates
+        shadows_df['task'] = shadows_df.apply(lambda x: f"{x['task']} (周期性于 {x['due_date'][:10]})" if x['_is_shadow'] else x['task'], axis=1)
+        completed_tasks = pd.concat([completed_tasks, shadows_df], ignore_index=True)
+        # Final sort for completed archive
+        completed_tasks.sort_values(by='due_date', ascending=False, inplace=True)
+
+    # Main Interface
     # CSS to style the download button in the header
     st.markdown("""
         <style>
@@ -440,21 +507,21 @@ try:
         else:
 
             # --- Displays Tab 1 ---
-            if final_today:
+            if final_today_open:
                 st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
-                for row in final_today: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
+                for row in final_today_open: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
 
-            if final_tomorrow:
+            if final_tomorrow_open:
                 st.markdown('<div class="section-header">🌙 明日处理事项</div>', unsafe_allow_html=True)
-                for row in final_tomorrow: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
+                for row in final_tomorrow_open: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
             
-            if final_week:
+            if final_week_open:
                 st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
-                for row in final_week: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
+                for row in final_week_open: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
                 
-            if final_later:
+            if final_later_open:
                 st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
-                for row in final_later: render_task(row, location="final_later")
+                for row in final_later_open: render_task(row, location="final_later")
 
     with t2:
         st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
@@ -470,7 +537,8 @@ try:
             st.info("目前没有已完成的事项。")
         else:
             for _, row in completed_tasks.iterrows():
-                render_task(row, location="comp_tab")
+                is_shade = row.get('_is_shadow', False)
+                render_task(row, is_shadow=is_shade, location="comp_tab")
 
 
     st.markdown("---")
