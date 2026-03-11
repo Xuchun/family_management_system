@@ -65,9 +65,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-def extract_date_llm(task_text):
-    if not client: return task_text, None, None
+def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
+    if not client: return task_text, fallback_date, fallback_recur
     now = get_now_sgt()
+    f_date = fallback_date if fallback_date else now.strftime("%Y-%m-%d 23:59")
+    f_recur = fallback_recur if fallback_recur else "None"
+    
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -75,8 +78,8 @@ def extract_date_llm(task_text):
                 {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
                 从用户文本中解析任务，并返回特定的格式：
                 1. CLEAN_TASK: 任务内容（去除里面的‘明天’、‘下周’等时间词，使显示更简洁）。
-                2. DATE: 截止日期时间 'YYYY-MM-DD HH:MM'。若未提到具体时间，默认为 23:59。务必根据‘今天’的日期准确推算‘明天’、‘后天’等的具体日期。
-                3. RECUR: 循环模式 (Monday, Tuesday..., Everyday, Weekend) 或 None。
+                2. DATE: 截止日期时间 'YYYY-MM-DD HH:MM'。若文本中提到新的日期/时间意图，请准确转换。若完全未提到日期意图，请务必返回原始日期：{f_date}。
+                3. RECUR: 循环模式 (Monday, Tuesday..., Everyday, Weekend) 或 None。若未提到新的循环意图，请返回：{f_recur}。
                 
                 返回格式示例：CLEAN_TASK: 内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
                 {"role": "user", "content": task_text}
@@ -89,15 +92,19 @@ def extract_date_llm(task_text):
         parts = {p.split(':', 1)[0].strip(): p.split(':', 1)[1].strip() for p in res.split('|') if ':' in p}
         
         c_task = parts.get("CLEAN_TASK", task_text)
-        dt_str = parts.get("DATE", now.strftime("%Y-%m-%d 23:59"))
-        recur_str = parts.get("RECUR", "None")
+        dt_str = parts.get("DATE", f_date)
+        recur_str = parts.get("RECUR", f_recur)
         
         # 验证日期格式
-        datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
-        return c_task, dt_str, (recur_str if recur_str != "None" else None)
+        try:
+            datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        except:
+            dt_str = f_date
+            
+        return c_task, dt_str, (None if recur_str == "None" else recur_str)
     except Exception as e:
         print(f"LLM 解析错误: {e}")
-        return task_text, now.strftime("%Y-%m-%d 23:59"), None
+        return task_text, f_date, (None if f_recur == "None" else f_recur)
 
 def get_tasks():
     conn = sqlite3.connect(DB_FILE)
@@ -146,7 +153,16 @@ def delete_task(task_id):
 def update_task_text(task_id, new_text):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("UPDATE tasks SET task = ? WHERE id = ?", (new_text, task_id))
+    # Fetch current timing to use as fallback
+    c.execute("SELECT due_date, recurring_pattern FROM tasks WHERE id = ?", (task_id,))
+    row = c.fetchone()
+    f_date, f_recur = (row[0], row[1]) if row else (None, None)
+    
+    # AI re-evaluation
+    clean_task, due_datetime, recur_pattern = extract_date_llm(new_text, f_date, f_recur)
+    
+    c.execute("UPDATE tasks SET task = ?, due_date = ?, recurring_pattern = ? WHERE id = ?", 
+              (clean_task, due_datetime, recur_pattern, task_id))
     conn.commit()
     conn.close()
 
