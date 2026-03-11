@@ -224,16 +224,15 @@ try:
         st.session_state["editing_task_id"] = None
 
     # 1. 检测是否是由‘登出’触发的重定向
-    if st.query_params.get("logout") == "1":
-        # 彻底执行物理清除
+    is_logging_out = st.query_params.get("logout") == "1"
+    if is_logging_out:
+        # 彻底执行物理清除 (此处不可调用 st.rerun，否则删除脚本无法发送给浏览器)
         cookie_manager.delete("family_system_auth")
         st.session_state["authenticated"] = False
-        # 清除查询参数并重刷以获得干净的 URL
         st.query_params.clear()
-        st.rerun()
 
-    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证时)
-    if not st.session_state["authenticated"]:
+    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证且不在登出动作中时)
+    if not st.session_state["authenticated"] and not is_logging_out:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
             st.session_state["authenticated"] = True
