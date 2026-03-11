@@ -306,14 +306,19 @@ try:
             st.rerun()
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
         st.divider()
-        new_task = st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task")
-        if st.button("立即添加", use_container_width=True):
-            if new_task:
+        def handle_add_cb():
+            st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
+            st.session_state["input_new_task"] = ""
+
+        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task")
+        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
+            task_to_add = st.session_state.get("temp_task_text")
+            if task_to_add:
                 with st.spinner("AI 解析并提交中..."):
-                    res = add_task(new_task)
+                    res = add_task(task_to_add)
                     st.session_state["last_add_result"] = res
-                    # Clear input
-                    st.session_state["input_new_task"] = ""
+                    # Clear temp and rerun to refresh
+                    st.session_state["temp_task_text"] = None
                     st.rerun()
 
     # --- 7. Data Preparation ---
