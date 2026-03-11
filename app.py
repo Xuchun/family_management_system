@@ -226,15 +226,17 @@ try:
     if "logout_requested" not in st.session_state:
         st.session_state["logout_requested"] = False
 
+    just_logged_out = False
     # 1. 拦截登出请求并优先处理
     if st.session_state["logout_requested"]:
         # 此处的 delete 会被作为组件指令安全地下发到前端
         cookie_manager.delete("family_system_auth")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
+        just_logged_out = True
 
-    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证时)
-    if not st.session_state["authenticated"]:
+    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证且不在刚刚登出的周期内时)
+    if not st.session_state["authenticated"] and not just_logged_out:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
             st.session_state["authenticated"] = True
