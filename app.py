@@ -35,7 +35,10 @@ SGT = pytz.timezone('Asia/Singapore')
 def get_now_sgt():
     return datetime.now(SGT)
 
-DB_FILE = "tasks.db"
+# Ensure data directory exists
+if not os.path.exists("data"):
+    os.makedirs("data")
+DB_FILE = "data/tasks.db"
 
 # --- 4. Database Functions ---
 def init_db():
