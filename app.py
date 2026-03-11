@@ -378,29 +378,7 @@ try:
 
     # Sidebar
     with st.sidebar:
-        st.header("🏠 系统控制")
-        
-        def handle_logout():
-            st.session_state["logout_requested"] = True
-            
-        st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
-        
         st.info(f"📍 新加坡时间\n{get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
-        st.divider()
-        def handle_add_cb():
-            st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
-            st.session_state["input_new_task"] = ""
-
-        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task")
-        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
-            task_to_add = st.session_state.get("temp_task_text")
-            if task_to_add:
-                with st.spinner("AI 解析并提交中..."):
-                    res = add_task(task_to_add)
-                    st.session_state["last_add_result"] = res
-                    # Clear temp and rerun to refresh
-                    st.session_state["temp_task_text"] = None
-                    st.rerun()
 
     # --- 7. Data Preparation ---
     tasks_df = get_tasks()
@@ -539,10 +517,15 @@ try:
         </style>
     """, unsafe_allow_html=True)
 
+    def handle_logout():
+        st.session_state["logout_requested"] = True
+
     # Header Row
-    c_title, c_dl = st.columns([0.72, 0.28])
+    c_title, c_dl, c_logout = st.columns([0.65, 0.20, 0.15])
     with c_title:
         st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
+    with c_logout:
+        st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_dl:
         def generate_txt_report():
             lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
@@ -580,12 +563,37 @@ try:
         if not tasks_df.empty:
             txt_content = generate_txt_report()
             st.download_button(
-                label="📥 下载任务列表 (TXT)",
+                label="📥 下载文本",
                 data=txt_content,
                 file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                 mime="text/plain",
-                key="dl_btn_header_v1"
+                key="dl_btn_header_v1",
+                use_container_width=True
             )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Add Task Section
+    def handle_add_cb():
+        st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
+        st.session_state["input_new_task"] = ""
+
+    col_add_input, col_add_btn = st.columns([0.85, 0.15])
+    with col_add_input:
+        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task", label_visibility="collapsed")
+    with col_add_btn:
+        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
+            pass
+
+    task_to_add = st.session_state.get("temp_task_text")
+    if task_to_add:
+        with st.spinner("AI 解析并提交中..."):
+            res = add_task(task_to_add)
+            st.session_state["last_add_result"] = res
+            st.session_state["temp_task_text"] = None
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"])
 
