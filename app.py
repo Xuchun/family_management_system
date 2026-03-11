@@ -567,7 +567,7 @@ try:
 
     col_add_input, col_add_btn, col_dl_btn = st.columns([0.50, 0.20, 0.30], vertical_alignment="bottom")
     with col_add_input:
-        st.text_input("➕ 新增事项:", placeholder="例如：每周二拿快递...", key="input_new_task", label_visibility="collapsed")
+        st.text_input("➕ 新增事项:", placeholder="请输入需要添加的代办事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
     with col_add_btn:
         if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
             pass
