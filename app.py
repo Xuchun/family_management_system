@@ -322,49 +322,55 @@ try:
                 st.rerun()
 
     # Main Interface
+    # --- 7. Data Preparation ---
+    tasks_df = get_tasks()
+    now = get_now_sgt()
+    today_date = now.date()
+    tomorrow_date = today_date + timedelta(days=1)
+    end_of_week = today_date + timedelta(days=6 - today_date.weekday())
+    
+    # Initialize all lists to avoid NameErrors
+    recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
+    shadow_today, shadow_tomorrow, shadow_week = [], [], []
+    open_tasks = pd.DataFrame()
+    completed_tasks = pd.DataFrame()
+
+    if not tasks_df.empty:
+        open_tasks = tasks_df[tasks_df['completed'] == 0]
+        completed_tasks = tasks_df[tasks_df['completed'] == 1]
+        
+        for _, row in open_tasks.iterrows():
+            if row['recurring_pattern']:
+                recurring_list.append(row)
+                continue
+            if not row['due_date']:
+                today_list.append(row)
+                continue
+            try:
+                due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
+                if due_dt <= today_date: today_list.append(row)
+                elif due_dt == tomorrow_date: tomorrow_list.append(row)
+                elif due_dt <= end_of_week: week_list.append(row)
+                else: later_list.append(row)
+            except: today_list.append(row)
+
+        for item in recurring_list:
+            if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
+            if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
+            
+            curr = tomorrow_date + timedelta(days=1)
+            while curr <= end_of_week:
+                if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
+                curr += timedelta(days=1)
+
+    # Main Interface
     st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
     t1, t2, t3, t4 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项", "📅 家庭日历"])
 
     with t1:
-        tasks_df = get_tasks()
         if tasks_df.empty:
             st.info("目前没有任务。在侧边栏添加一个吧！")
         else:
-            now = get_now_sgt()
-            today_date = now.date()
-            tomorrow_date = today_date + timedelta(days=1)
-            # Calculate end of current week (Sunday)
-            end_of_week = today_date + timedelta(days=6 - today_date.weekday())
-            
-            open_tasks = tasks_df[tasks_df['completed'] == 0]
-            completed_tasks = tasks_df[tasks_df['completed'] == 1]
-            recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
-            
-            for _, row in open_tasks.iterrows():
-                if row['recurring_pattern']:
-                    recurring_list.append(row)
-                    continue
-                if not row['due_date']:
-                    today_list.append(row)
-                    continue
-                try:
-                    due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
-                    if due_dt <= today_date: today_list.append(row)
-                    elif due_dt == tomorrow_date: tomorrow_list.append(row)
-                    elif due_dt <= end_of_week: week_list.append(row)
-                    else: later_list.append(row)
-                except: today_list.append(row)
-
-            shadow_today, shadow_tomorrow, shadow_week = [], [], []
-            for item in recurring_list:
-                if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
-                if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
-                
-                curr = tomorrow_date + timedelta(days=1)
-                while curr <= end_of_week:
-                    if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
-                    curr += timedelta(days=1)
-
             # --- Displays Tab 1 ---
             if today_list or shadow_today:
                 st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
