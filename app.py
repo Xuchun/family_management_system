@@ -199,6 +199,26 @@ try:
         if p == 'Weekend' and target_date.weekday() >= 5: return True
         return p == target_date.strftime('%A')
 
+    def format_tasks_to_txt(df):
+        if df.empty:
+            return "没有任务数据。"
+        # 表格表头
+        header = f"{'截止时间':<20} | {'任务内容':<50} | {'循环':<15} | {'状态':<10}\n"
+        sep = "-" * 100 + "\n"
+        lines = [header, sep]
+        
+        # 按照完成状态和日期排序
+        sorted_df = df.sort_values(by=['completed', 'due_date'], ascending=[True, True])
+        
+        for _, row in sorted_df.iterrows():
+            due = row['due_date'] if row['due_date'] else "未设置"
+            task = row['task'].replace('\n', ' ')
+            recur = row['recurring_pattern'] if row['recurring_pattern'] else "无"
+            status = "✅ 已完成" if row['completed'] else "⏳ 待办"
+            lines.append(f"{due:<20} | {task:<50} | {recur:<15} | {status:<10}\n")
+        
+        return "".join(lines)
+
     def render_task(row, is_shadow=False, location="main"):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
         del_id = f"{location}_d_{row['id']}"
@@ -303,7 +323,20 @@ try:
                 curr += timedelta(days=1)
 
     # Main Interface
-    st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
+    c_title, c_btn = st.columns([0.7, 0.3])
+    with c_title:
+        st.markdown("<h1 class='main-header'>🏠 家庭事项管理中心</h1>", unsafe_allow_html=True)
+    with c_btn:
+        if not tasks_df.empty:
+            txt_content = format_tasks_to_txt(tasks_df)
+            st.download_button(
+                label="📥 下载任务报表 (TXT)",
+                data=txt_content,
+                file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
+                mime="text/plain",
+                key="dl_btn"
+            )
+
     t1, t2, t3 = st.tabs(["📝 待办事宜", "🔄 循环事项", "✅ 已完成事项"])
 
     with t1:
