@@ -512,11 +512,11 @@ try:
                 for row in final_today_open: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
 
             if final_tomorrow_open:
-                st.markdown('<div class="section-header">🌙 明日处理事项</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header">🌙 明日事项</div>', unsafe_allow_html=True)
                 for row in final_tomorrow_open: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
             
             if final_week_open:
-                st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header">🗓️ 本周剩余事项</div>', unsafe_allow_html=True)
                 for row in final_week_open: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
                 
             if final_later_open:
