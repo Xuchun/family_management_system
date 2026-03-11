@@ -362,6 +362,37 @@ try:
                 if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                 curr += timedelta(days=1)
 
+    # --- 8. Combine and Sort ---
+    def prepare_sorted_list(normal_items, shadow_items_with_dates=None, shadow_items_plain=None, default_date=None):
+        combined = []
+        for r in normal_items:
+            temp = r.copy()
+            temp['_is_shadow'] = False
+            combined.append(temp)
+        
+        if shadow_items_plain and default_date:
+            for r in shadow_items_plain:
+                temp = r.copy()
+                temp['_is_shadow'] = True
+                temp['due_date'] = default_date.strftime("%Y-%m-%d 12:00")
+                combined.append(temp)
+        
+        if shadow_items_with_dates:
+            for r, d in shadow_items_with_dates:
+                temp = r.copy()
+                temp['_is_shadow'] = True
+                temp['due_date'] = d.strftime("%Y-%m-%d 12:00")
+                combined.append(temp)
+        
+        # Sort by due_date
+        combined.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
+        return combined
+
+    final_today = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
+    final_tomorrow = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
+    final_week = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
+    final_later = prepare_sorted_list(later_list)
+
     # Main Interface
     c_title, c_btn = st.columns([0.7, 0.3])
     with c_title:
@@ -385,27 +416,21 @@ try:
         else:
 
             # --- Displays Tab 1 ---
-            if today_list or shadow_today:
+            if final_today:
                 st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
-                for row in shadow_today: render_task(row, is_shadow=True, location="sh_today")
-                for row in today_list: render_task(row, location="today")
+                for row in final_today: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
 
-            if tomorrow_list or shadow_tomorrow:
+            if final_tomorrow:
                 st.markdown('<div class="section-header">🌙 明日处理事项</div>', unsafe_allow_html=True)
-                for row in shadow_tomorrow: render_task(row, is_shadow=True, location="sh_tomorrow")
-                for row in tomorrow_list: render_task(row, location="tomorrow")
+                for row in final_tomorrow: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
             
-            if week_list or shadow_week:
+            if final_week:
                 st.markdown('<div class="section-header">🗓️ 本周剩余任务</div>', unsafe_allow_html=True)
-                for item, d in shadow_week:
-                    temp_row = item.copy()
-                    temp_row['due_date'] = d.strftime("%Y-%m-%d 12:00")
-                    render_task(temp_row, is_shadow=True, location="sh_week")
-                for row in week_list: render_task(row, location="week")
+                for row in final_week: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
                 
-            if later_list:
+            if final_later:
                 st.markdown('<div class="section-header">⏳ 以后待办</div>', unsafe_allow_html=True)
-                for row in later_list: render_task(row, location="later")
+                for row in final_later: render_task(row, location="final_later")
 
     with t2:
         st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
