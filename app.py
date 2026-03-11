@@ -79,9 +79,9 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
             messages=[
                 {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
                 从用户文本中解析任务，并返回特定的格式：
-                1. CLEAN_TASK: 任务内容（去除里面的‘明天’、‘下周’等时间词，使显示更简洁）。
+                1. CLEAN_TASK: 任务内容（去除里面的‘明天’、‘下周’等时间词，但请保留工资、费用等重要信息，使显示更简洁）。
                 2. DATE: 截止日期时间 'YYYY-MM-DD HH:MM'。若文本中提到新的日期/时间意图，请准确转换。若完全未提到日期意图，请务必返回原始日期：{f_date}。
-                3. RECUR: 循环模式 (Monday, Tuesday..., Everyday, Weekend) 或 None。若未提到新的循环意图，请返回：{f_recur}。
+                3. RECUR: 循环模式 (例如 Monday, Tuesday..., Everyday, Weekend, Monthly-15, Monthly-LastDay 等) 或 None。若未提到新的循环意图，请返回：{f_recur}。
                 
                 返回格式示例：CLEAN_TASK: 内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
                 {"role": "user", "content": task_text}
@@ -280,6 +280,15 @@ try:
         p = pattern.strip()
         if p == 'Everyday': return True
         if p == 'Weekend' and target_date.weekday() >= 5: return True
+        if p == 'Monthly-LastDay':
+            # 如果明天的号数是 1，那就说明今天是本月最后一天
+            return (target_date + timedelta(days=1)).day == 1
+        if p.startswith('Monthly-'):
+            try:
+                target_day = int(p.split('-')[1])
+                return target_date.day == target_day
+            except:
+                pass
         return p == target_date.strftime('%A')
 
 
