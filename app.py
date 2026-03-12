@@ -210,6 +210,20 @@ st.markdown("""
         background: #e0e7ff; color: #4338ca; font-size: 0.75rem; padding: 2px 8px;
         border-radius: 12px; font-weight: 600; margin-left: 8px;
     }
+    
+    /* First-level (main module) tabs style to match section-header */
+    div[data-testid="stTabs"] button[data-baseweb="tab"] p {
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        color: #1e3a8a !important;
+    }
+    
+    /* Second-level (nested) sub-tabs styling reset */
+    div[data-testid="stTabs"] div[data-testid="stTabs"] button[data-baseweb="tab"] p {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: #4b5563 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
