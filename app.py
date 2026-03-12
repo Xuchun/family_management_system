@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "2.1"
+VERSION = "2.2"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -653,7 +653,7 @@ try:
         pass
 
     st.markdown('<br>', unsafe_allow_html=True)
-    top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💪 我的健身', '💰 家庭财务', '🌸 恩雅的健康'])
+    top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '� 家庭财务', '� 我的健身', '🌸 恩雅的健康'])
 
     with top_tab1:
 
@@ -775,32 +775,17 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
     with top_tab2:
-        st.subheader('🎯 我的健身目标')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('📅 健身计划')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('✅ 每次健身项目完成记录')
-        st.info('内容可以先为空，我后面会继续加入。')
-
-    with top_tab3:
         st.subheader('💵 当前家庭财务一览')
         st.info('内容可以先为空，我后面会继续加入。')
         st.subheader('📈 投资一览表')
         st.info('内容可以先为空，我后面会继续加入。')
 
-
-    with top_tab2:
+    with top_tab3:
         st.subheader('🎯 我的健身目标')
         st.info('内容可以先为空，我后面会继续加入。')
         st.subheader('📅 健身计划')
         st.info('内容可以先为空，我后面会继续加入。')
         st.subheader('✅ 每次健身项目完成记录')
-        st.info('内容可以先为空，我后面会继续加入。')
-
-    with top_tab3:
-        st.subheader('💵 当前家庭财务一览')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('📈 投资一览表')
         st.info('内容可以先为空，我后面会继续加入。')
 
     with top_tab4:
