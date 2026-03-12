@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "1.7"
+VERSION = "1.9"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -81,14 +81,18 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
-                你的唯一任务是：解析用户文本中的时间意图（日期、时间、循环模式）。
-                ⚠️ 极其重要：严禁修改、简化或润色用户的文字内容。请原样保留用户输入的任务描述。
+                你的职能：解析时间意图，并清理任务描述。
                 
-                解析规则：
-                1. DATE: 截止日期时间 'YYYY-MM-DD HH:MM'。若文本中提到新的日期/时间意图，请准确转换。若完全未提到，请返回原始日期：{f_date}。
-                2. RECUR: 循环模式 (例如 Monday, Tuesday..., Everyday, Weekend, Monthly-15, Monthly-LastDay 等) 或 None。若未提到新的循环意图，请返回：{f_recur}。
+                ⚠️ 极其重要严格指令：
+                1. CLEAN_TASK: 请从原始文本中**彻底移除**所有时间词汇（例如：“今晚6点”、“明天”、“下周二”、“后天中午”等）。
+                2. 严禁改动：除了删除时间词，绝对不允许修改、简化、润色、总结或翻译用户的任何其他文字。用户输入的长难句必须高保全。
+                3. DATE: 截止日期时间格式 'YYYY-MM-DD HH:MM'。
+                4. RECUR: 循环模式或 None。
                 
-                返回格式示例：DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
+                示例输入：“今晚6点去超市买菜，明天记得带伞”
+                期望输出：CLEAN_TASK: 去超市买菜，记得带伞 | DATE: {now.strftime('%Y-%m-%d')} 18:00 | RECUR: None
+                
+                请按照以下格式返回：CLEAN_TASK: 清理后的内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
@@ -96,8 +100,13 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         res = response.choices[0].message.content.strip()
         
         # 解析返回结果
-        parts = {p.split(':', 1)[0].strip(): p.split(':', 1)[1].strip() for p in res.split('|') if ':' in p}
+        parts = {}
+        for p in res.split('|'):
+            if ':' in p:
+                k, v = p.split(':', 1)
+                parts[k.strip()] = v.strip()
         
+        c_task = parts.get("CLEAN_TASK", task_text)
         dt_str = parts.get("DATE", f_date)
         recur_str = parts.get("RECUR", f_recur)
         
@@ -107,7 +116,7 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         except:
             dt_str = f_date
             
-        return task_text, dt_str, (None if recur_str == "None" else recur_str)
+        return c_task, dt_str, (None if recur_str == "None" else recur_str)
     except Exception as e:
         print(f"LLM 解析错误: {e}")
         return task_text, f_date, (None if f_recur == "None" else f_recur)
@@ -121,12 +130,12 @@ def get_tasks():
 
 def add_task(task_text):
     try:
-        orig_task, due_datetime, recur_pattern = extract_date_llm(task_text)
+        clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
         now_str = get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
-                  (orig_task, due_datetime, recur_pattern, now_str))
+                  (clean_task, due_datetime, recur_pattern, now_str))
         task_id = c.lastrowid
         conn.commit()
         
@@ -165,10 +174,10 @@ def update_task_text(task_id, new_text):
     f_date, f_recur = (row[0], row[1]) if row else (None, None)
     
     # AI re-evaluation - but only for date/recur
-    orig_text, due_datetime, recur_pattern = extract_date_llm(new_text, f_date, f_recur)
+    clean_text, due_datetime, recur_pattern = extract_date_llm(new_text, f_date, f_recur)
     
     c.execute("UPDATE tasks SET task = ?, due_date = ?, recurring_pattern = ? WHERE id = ?", 
-              (orig_text, due_datetime, recur_pattern, task_id))
+              (clean_text, due_datetime, recur_pattern, task_id))
     conn.commit()
     conn.close()
 
@@ -183,6 +192,8 @@ def unmark_recurring_date_completed(task_id, date_str):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("DELETE FROM recurring_completions WHERE task_id = ? AND completed_date = ?", (task_id, date_str))
+    conn.commit()
+    conn.close()
     conn.commit()
     conn.close()
 
