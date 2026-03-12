@@ -258,9 +258,10 @@ try:
 
     # 2. 尝试从浏览器读取 Cookie (仅在尚未认证且不在刚刚登出的周期内时)
     if not st.session_state["authenticated"] and not just_logged_out:
-        auth_cookie = cookie_manager.get("family_system_auth")
-        if auth_cookie == "authenticated":
+        cookies = cookie_manager.get_all()
+        if cookies and cookies.get("family_system_auth") == "authenticated":
             st.session_state["authenticated"] = True
+            st.rerun()
 
     # 2. 如果当前未通过任何方式认证，则显示登录页面
     login_placeholder = st.empty()
@@ -274,6 +275,7 @@ try:
                     st.session_state["authenticated"] = True
                     cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
                     st.success("✅ 登录成功！正在为您开启系统...")
+                    st.rerun()
                 elif pwd:
                     st.error("🚫 密码错误")
                 
@@ -601,7 +603,7 @@ try:
                 if not tasks_df.empty:
                     txt_content = generate_txt_report()
                     st.download_button(
-                        label="📥 下载待办事项清单",
+                        label="下载待办事项清单",
                         data=txt_content,
                         file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                         mime="text/plain",
