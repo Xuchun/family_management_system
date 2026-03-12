@@ -243,22 +243,26 @@ try:
     if "editing_task_id" not in st.session_state:
         st.session_state["editing_task_id"] = None
 
+    # extra_streamlit_components 是异步的，刷新后第一次运行往往返回 None。
+    # 我们停住脚本渲染，直到它返回结果（空字典或有值），这能彻底解决刷新跳回登录页的问题。
+    cookies = cookie_manager.get_all()
+    if cookies is None:
+        st.markdown("<div style='text-align:center; margin-top:100px; color:#1e3a8a;'>⏳ 正在同步系统安全会话...</div>", unsafe_allow_html=True)
+        st.stop()
+
     if "logout_requested" not in st.session_state:
         st.session_state["logout_requested"] = False
 
     just_logged_out = False
     # 1. 拦截登出请求并优先处理
     if st.session_state["logout_requested"]:
-        # 核心漏洞修复：extra_streamlit_components 的 delete() 方法由于缺少 path=/ 参数，
-        # 会在部分浏览器或场景下静默失败。强制使用 set() 并附带过去的时间戳进行底层物理覆写。
         cookie_manager.set("family_system_auth", "", expires_at=datetime.now() - timedelta(days=365))
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
         just_logged_out = True
 
-    # 2. 尝试从浏览器读取 Cookie (仅在尚未认证且不在刚刚登出的周期内时)
+    # 2. 尝试从浏览器恢复认证状态
     if not st.session_state["authenticated"] and not just_logged_out:
-        cookies = cookie_manager.get_all()
         if cookies and cookies.get("family_system_auth") == "authenticated":
             st.session_state["authenticated"] = True
             st.rerun()
