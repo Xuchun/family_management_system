@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "2.0"
+VERSION = "2.1"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -853,9 +853,34 @@ try:
                     st.success("记录已保存！")
                     st.rerun()
 
+            def generate_period_report(df):
+                if df.empty: return "尚无经期记录。"
+                lines = ["🌸 恩雅的经期健康记录报告\n", "=" * 40 + "\n\n"]
+                lines.append(f"{'日期':<15} | {'事件内容':<20}\n")
+                lines.append("-" * 40 + "\n")
+                for _, row in df.iterrows():
+                    lines.append(f"{row['record_date']:<15} | {row['event_type']:<20}\n")
+                lines.append("\n" + "=" * 40 + "\n")
+                lines.append(f"导出时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
+                return "".join(lines)
+
             st.markdown("---")
-            st.markdown("### 📜 经期历史记录")
             periods_df = get_enya_periods()
+            p_head_col1, p_head_col2 = st.columns([0.7, 0.3], vertical_alignment="center")
+            with p_head_col1:
+                st.markdown("### 📜 经期历史记录")
+            with p_head_col2:
+                if not periods_df.empty:
+                    p_txt = generate_period_report(periods_df)
+                    st.download_button(
+                        label="📥 下载经期记录",
+                        data=p_txt,
+                        file_name=f"恩雅经期记录_{get_now_sgt().strftime('%m%d')}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key="dl_period_btn"
+                    )
+
             if periods_df.empty:
                 st.info("尚无月经记录。")
             else:
