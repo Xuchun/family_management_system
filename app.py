@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
