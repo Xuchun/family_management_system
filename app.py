@@ -196,7 +196,16 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap');
     .stApp { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); font-family: 'Outfit', sans-serif; }
-    .main-header { color: #1e3a8a; text-align: center; font-size: 2rem !important; font-weight: 700; padding: 1rem 0; }
+    .main-header { 
+        color: #1e3a8a; 
+        font-size: 2rem !important; 
+        font-weight: 700; 
+        padding: 1rem 0; 
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+    }
     .section-header { 
         color: #1e3a8a; font-weight: 700; padding: 1.5rem 0 0.5rem 0; font-size: 1.2rem;
         border-bottom: 2px solid #e5e7eb; margin-bottom: 0.5rem;
