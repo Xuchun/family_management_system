@@ -8,6 +8,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
+import time
 
 VERSION = "1.3"
 
@@ -243,26 +244,37 @@ try:
     # --- 🔐 登录逻辑与持久化验证 ---
     AUTH_KEY = "family_auth_persistent"
     
+    # 确保初始化
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
     
-    # 尝试读取持久化 Cookie
-    auth_val = cookie_manager.get(AUTH_KEY)
-    
-    # 静默恢复会话 (Session 优先，Cookie 为辅)
-    if not st.session_state["authenticated"] and auth_val == "authenticated":
-        st.session_state["authenticated"] = True
-        # 不使用 st.rerun() 避免在还没读到时产生死循环
-    
-    # 1. 拦截登出请求
+    # 1. 尝试静默识别身份 (这是刷新网页后的关键点)
+    if not st.session_state["authenticated"]:
+        # 向浏览器组件索要 Cookie
+        cookies = cookie_manager.get_all()
+        
+        if cookies is None:
+            # 状态：正在同步（通常仅持续不到 0.5 秒）
+            # 我们不使用 st.stop() 以免造成白屏，而是显示一个小加载并强制重试
+            with st.spinner("🔐 正在同步安全会话..."):
+                time.sleep(0.5) # 给组件一点缓冲时间
+                st.rerun()
+        else:
+            # 状态：同步完成（可能是空字典或有数据）
+            if cookies.get(AUTH_KEY) == "authenticated":
+                st.session_state["authenticated"] = True
+                st.success("✅ 已通过本地凭证恢复登录")
+                st.rerun()
+
+    # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
         cookie_manager.set(AUTH_KEY, "", expires_at=datetime.now() - timedelta(days=365), path="/")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
-        components.html(f"<script>window.parent.document.cookie = '{AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>", height=0)
+        components.html(f"<script>window.parent.document.cookie = '{AUTH_KEY}=; expires=Sun, 01 Jan 2023 00:00:00 UTC; path=/;';</script>", height=0)
         st.rerun()
 
-    # 2. 渲染登录界面 (仅在没有认证通过时)
+    # 3. 渲染登录界面 (仅在确定没有认证且同步已跑完的情况下)
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
@@ -272,6 +284,7 @@ try:
                 pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
                 if pwd == app_pwd:
                     st.session_state["authenticated"] = True
+                    # 双重锁合设置：组建 + 原生 JS
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=datetime.now() + timedelta(days=30), path="/")
                     exp_utc = (datetime.now() + timedelta(days=30)).strftime("%a, %d %b %Y %H:%M:%S GMT")
                     components.html(f"<script>window.parent.document.cookie = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=Lax';</script>", height=0)
@@ -280,7 +293,7 @@ try:
                 elif pwd:
                     st.error("🚫 密码错误")
                 st.info("💡 提示：密码是6位数字。")
-            st.stop() # 阻断主程序渲染直到登录成功
+            st.stop() # 绝对阻止后续主程序运行段加载
             
     # 一旦认证成功，如果原本显示了登录界面，现在将其清空
     if st.session_state["authenticated"]:
