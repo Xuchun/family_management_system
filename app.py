@@ -261,7 +261,6 @@ try:
         auth_cookie = cookie_manager.get("family_system_auth")
         if auth_cookie == "authenticated":
             st.session_state["authenticated"] = True
-            st.rerun()
 
     # 2. 如果当前未通过任何方式认证，则显示登录页面
     login_placeholder = st.empty()
