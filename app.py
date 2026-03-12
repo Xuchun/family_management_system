@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 
+VERSION = "1.3"
+
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
     page_title="家庭管理系统",
