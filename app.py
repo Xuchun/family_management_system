@@ -247,46 +247,34 @@ try:
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
-    # 1. 核心同步屏障：这是解决刷新跳回登录页的关键
-    # extra_streamlit_components 是异步的，在脚本刚开始运行时 get_all() 为 None
-    # 我们必须阻塞渲染并重试，直到它返回结果（确定有或确定没有）
-    cookies = cookie_manager.get_all()
+    # 1. 核心修复：使用 Streamlit 原生同步 Cookie 读取
+    # st.context.cookies 是同步的，刷新网页时会立即随请求传回，不需要等待。
+    native_cookies = st.context.cookies
     
-    if cookies is None:
-        # 此时浏览器还没把 Cookie 传给 Python，我们屏住呼吸等待
-        st.markdown("""
-            <div style='display:flex; justify-content:center; align-items:center; height:300px; flex-direction:column;'>
-                <div style='color:#1e3a8a; font-size:1.5rem; font-weight:bold;'>🏠 家庭管理系统</div>
-                <div style='color:#666; margin-top:10px;'>正在恢复会话，请稍候...</div>
-            </div>
-        """, unsafe_allow_html=True)
-        time.sleep(0.5)
-        st.rerun()
-
-    # 2. 静默恢复：如果 Session 没认证，但在 Cookie 中找到了有效凭证
+    # 静默恢复：如果 Session 没认证，但在原生 Cookie 中找到了有效凭证
     if not st.session_state["authenticated"]:
-        if cookies.get(AUTH_KEY) == "authenticated":
+        if native_cookies.get(AUTH_KEY) == "authenticated":
             st.session_state["authenticated"] = True
-            st.rerun()
+            # 同步 session_state 后继续运行，不需要 st.rerun()，因为它是首行同步读取的
 
-    # 3. 处理登出请求
+    # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
+        # 写入清除指令
         cookie_manager.set(AUTH_KEY, "", expires_at=datetime.now() - timedelta(days=365), path="/")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
-        # 强力彻底清除 JS Cookie
+        # JS 双重清理
         components.html(f"""
             <script>
-                document.cookie = '{AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                document.cookie = '{AUTH_KEY}=; expires=Sun, 01 Jan 2023 00:00:00 UTC; path=/;';
+                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=; expires=Sun, 01 Jan 2023 00:00:00 UTC; path=/;';
             </script>
         """, height=0)
         st.rerun()
 
-    # 4. 如果仍未认证，则显示登录页面
+    # 3. 渲染登录界面 (仅在仍未通过验证时)
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
-        # 彻底阻断后面复杂的业务逻辑加载，直到登录完成
         with login_placeholder.container():
             st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🔒 访问受限</h2>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
@@ -294,19 +282,17 @@ try:
                 pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd")
                 if pwd == app_pwd:
                     st.session_state["authenticated"] = True
-                    # 持久存储 30 天
+                    # 设置持久化 Cookie (30天)
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
                     
-                    # 强力锁定：使用原生 JS 设置跨域/跨层 Cookie
+                    # 强力锁定：使用原生 JS 设置
                     exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
                     components.html(f"""
                         <script>
                             var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=Lax';
                             document.cookie = c_str;
-                            if(window.parent && window.parent.document) {{
-                                window.parent.document.cookie = c_str;
-                            }}
+                            if(window.parent) window.parent.document.cookie = c_str;
                         </script>
                     """, height=0)
                     st.success("✅ 登录成功！")
@@ -314,7 +300,7 @@ try:
                 elif pwd:
                     st.error("🚫 密码错误")
                 st.info("💡 提示：密码是您设置的 6 位数字密钥。")
-            st.stop() # 绝对不加载任何后续主程序逻辑
+            st.stop() # 阻断主程序渲染直到登录成功
             
     # 一旦认证成功，如果原本显示了登录界面，现在将其清空
     if st.session_state["authenticated"]:
