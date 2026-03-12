@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "1.4"
+VERSION = "1.6"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -219,6 +219,12 @@ st.markdown("""
         background: #e0e7ff; color: #4338ca; font-size: 0.75rem; padding: 2px 8px;
         border-radius: 12px; font-weight: 600; margin-left: 8px;
     }
+    .overdue-header { 
+        color: #ef4444 !important; font-weight: 700; padding: 1.5rem 0 0.5rem 0; font-size: 1.2rem;
+        border-bottom: 2px solid #fecaca; margin-bottom: 0.5rem;
+    }
+    .overdue-text { color: #ef4444 !important; }
+    .overdue-date { color: #f87171 !important; }
     
     /* First-level (main module) tabs style to match section-header */
     div[data-testid="stTabs"] button[data-baseweb="tab"] p {
@@ -247,15 +253,21 @@ try:
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
-    # 1. 核心修复：使用 Streamlit 原生同步 Cookie 读取
-    # st.context.cookies 是同步的，刷新网页时会立即随请求传回，不需要等待。
+    # 1. 深度持久化验证 (Native + Session + Fallback)
+    # 我们采用“优先信任、异步补录”策略
     native_cookies = st.context.cookies
     
-    # 静默恢复：如果 Session 没认证，但在原生 Cookie 中找到了有效凭证
+    # 尝试从所有可能的来源提取凭证
     if not st.session_state["authenticated"]:
+        # 强制检查原生 Cookie (最快)
         if native_cookies.get(AUTH_KEY) == "authenticated":
             st.session_state["authenticated"] = True
-            # 同步 session_state 后继续运行，不需要 st.rerun()，因为它是首行同步读取的
+        else:
+            # 尝试通过组件二次确认 (稍慢但可作为备选)
+            mgr_val = cookie_manager.get(AUTH_KEY)
+            if mgr_val == "authenticated":
+                st.session_state["authenticated"] = True
+                st.rerun() # 发现凭证，强制重绘界面进入主程序
 
     # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
@@ -358,7 +370,7 @@ try:
     if "last_add_result" in st.session_state:
         show_add_dialog(st.session_state.pop("last_add_result"))
 
-    def render_task(row, is_shadow=False, location="main"):
+    def render_task(row, is_shadow=False, location="main", is_overdue=False):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
         del_id = f"{location}_d_{row['id']}"
         edit_id = f"{location}_e_{row['id']}"
@@ -398,10 +410,14 @@ try:
                     st.rerun()
             else:
                 style = "todo-completed" if row['completed'] else ""
+                # Red text for overdue
+                overdue_cls = "overdue-text" if is_overdue else ""
+                overdue_date_cls = "overdue-date" if is_overdue else ""
+                
                 recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
                 due_val = f"📅 日期/时间: {format_date_with_weekday(row['due_date'])}" if row['due_date'] else ""
                 
-                c2.markdown(f"<p class='todo-text {style}'>{row['task']}{recur_tag}</p><div class='todo-date'>{due_val}</div>", unsafe_allow_html=True)
+                c2.markdown(f"<p class='todo-text {style} {overdue_cls}'>{row['task']}{recur_tag}</p><div class='todo-date {overdue_date_cls}'>{due_val}</div>", unsafe_allow_html=True)
                 
                 if not is_shadow:
                     edit_col, del_col = c3.columns(2)
@@ -427,8 +443,8 @@ try:
     end_of_month = next_month - timedelta(days=next_month.day)
     
     # Initialize all lists to avoid NameErrors
-    recurring_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], []
-    shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], []
+    recurring_list, overdue_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], [], []
+    shadow_overdue, shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], [], []
     open_tasks = pd.DataFrame()
     completed_tasks = pd.DataFrame()
 
@@ -445,7 +461,8 @@ try:
                 continue
             try:
                 due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
-                if due_dt <= today_date: today_list.append(row)
+                if due_dt < today_date: overdue_list.append(row)
+                elif due_dt == today_date: today_list.append(row)
                 elif due_dt == tomorrow_date: tomorrow_list.append(row)
                 elif due_dt <= end_of_week: week_list.append(row)
                 else: later_list.append(row)
@@ -512,6 +529,7 @@ try:
         
         return open_list, done_list
 
+    final_overdue_open, final_overdue_done = prepare_sorted_list(overdue_list, shadow_items_plain=shadow_overdue)
     final_today_open, final_today_done = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
     final_tomorrow_open, final_tomorrow_done = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
     final_week_open, final_week_done = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
@@ -593,6 +611,7 @@ try:
                         lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
                     lines.append("\n")
 
+                add_section("🔴 未完成事项", final_overdue_open)
                 add_section("⚡ 今日急需处理", final_today_open)
                 add_section("🌙 明日事项", final_tomorrow_open)
                 add_section("🗓️ 本周剩余事项", final_week_open)
@@ -611,7 +630,7 @@ try:
 
             col_add_input, col_add_btn, col_dl_btn = st.columns([0.65, 0.15, 0.20], vertical_alignment="bottom")
             with col_add_input:
-                st.text_input("➕ 新增事项:", placeholder="请输入需要添加的代办事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
+                st.text_input("➕ 新增事项:", placeholder="请输入需要添加的新事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
             with col_add_btn:
                 if st.button("立即添加新事项", use_container_width=True, on_click=handle_add_cb):
                     pass
@@ -643,6 +662,13 @@ try:
                 if tasks_df.empty:
                     st.info("目前没有任务。在侧边栏添加一个吧！")
                 else:
+
+                    if final_overdue_open:
+                        st.markdown('<div class="overdue-header">🔴 未完成事项</div>', unsafe_allow_html=True)
+                        for row in final_overdue_open: 
+                            # 确定是否是 shadow task
+                            is_sh = row.get('_is_shadow', False)
+                            render_task(row, is_shadow=is_sh, location="final_overdue", is_overdue=True)
 
                     # --- Displays Tab 1 ---
                     if final_today_open:
