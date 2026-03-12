@@ -7,6 +7,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 import extra_streamlit_components as stx
+import streamlit.components.v1 as components
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -240,34 +241,27 @@ try:
     # --- 🔐 登录逻辑与持久化验证 ---
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
-    if "editing_task_id" not in st.session_state:
-        st.session_state["editing_task_id"] = None
-
-    # extra_streamlit_components 是异步的，刷新后第一次运行往往返回 None。
-    # 我们停住脚本渲染，直到它返回结果（空字典或有值），这能彻底解决刷新跳回登录页的问题。
+    
+    # 核心：必须同步等待 Cookie 管理器就绪，否则刷新必掉线
     cookies = cookie_manager.get_all()
     if cookies is None:
-        st.markdown("<div style='text-align:center; margin-top:100px; color:#1e3a8a;'>⏳ 正在同步系统安全会话...</div>", unsafe_allow_html=True)
-        st.stop()
-
-    if "logout_requested" not in st.session_state:
-        st.session_state["logout_requested"] = False
-
-    just_logged_out = False
-    # 1. 拦截登出请求并优先处理
-    if st.session_state["logout_requested"]:
-        cookie_manager.set("family_system_auth", "", expires_at=datetime.now() - timedelta(days=365))
+        st.stop() # 异步等待，不渲染任何 UI
+    
+    # 处理登出请求
+    if st.session_state.get("logout_requested"):
+        cookie_manager.set("family_system_auth", "", expires_at=datetime.now() - timedelta(days=365), path="/")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
-        just_logged_out = True
+        components.html("<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>", height=0)
+        st.rerun()
 
-    # 2. 尝试从浏览器恢复认证状态
-    if not st.session_state["authenticated"] and not just_logged_out:
-        if cookies and cookies.get("family_system_auth") == "authenticated":
+    # 静默尝试恢复认证：如果 Session 掉了但 Cookie 还在
+    if not st.session_state["authenticated"]:
+        if cookies.get("family_system_auth") == "authenticated":
             st.session_state["authenticated"] = True
-            st.rerun()
-
-    # 2. 如果当前未通过任何方式认证，则显示登录页面
+            # 不要在这里 st.rerun()，让它自然流淌到主要 UI 代码，防止死循环
+    
+    # 渲染逻辑控制
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
@@ -277,27 +271,25 @@ try:
                 pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
                 if pwd == app_pwd:
                     st.session_state["authenticated"] = True
-                    cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30))
-                    st.success("✅ 登录成功！正在为您开启系统...")
+                    # 双重锁合设置：组建 + 原生 JS
+                    cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30), path="/")
+                    exp_utc = (datetime.now() + timedelta(days=30)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+                    components.html(f"<script>window.parent.document.cookie = 'family_system_auth=authenticated; expires={exp_utc}; path=/; SameSite=Lax';</script>", height=0)
+                    st.success("✅ 登录成功！")
                     st.rerun()
                 elif pwd:
                     st.error("🚫 密码错误")
-                
                 st.info("💡 提示：密码是6位数字。")
-                st.warning("⚠️ 如果您是 Safari 浏览器用户：请确保已关闭‘阻止所有 Cookie’或‘阻止跨站追踪’设置，否则系统无法保持登录。")
+            st.stop() # 强制阻断，没登录成功不许看下面的内容
             
     # 一旦认证成功，如果原本显示了登录界面，现在将其清空
     if st.session_state["authenticated"]:
         login_placeholder.empty()
     else:
-        # 否则阻断后续显示
-        if just_logged_out:
-            import streamlit.components.v1 as components
-            components.html(
-                "<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>",
-                height=0
-            )
-        st.stop()
+        st.stop() # 绝对阻断
+
+    if "editing_task_id" not in st.session_state:
+        st.session_state["editing_task_id"] = None
 
     # --- 🛠️ 辅助 UI 函数 ---
     def hits_day(pattern, target_date):
