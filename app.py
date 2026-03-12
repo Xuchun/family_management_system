@@ -525,114 +525,149 @@ try:
     with c_title:
         st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
 
-    def generate_txt_report():
-        lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
-        
-        def add_section(title, task_list):
-            # Ensure we handle DataFrame vs List of Dicts properly
-            if isinstance(task_list, pd.DataFrame):
-                if task_list.empty: return
-                iterable = [row.to_dict() for _, row in task_list.iterrows()]
-            else:
-                if not task_list: return
-                iterable = task_list
+    st.markdown('<br>', unsafe_allow_html=True)
+    top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '💪 我的健身', '💰 家庭财务'])
 
-            lines.append(f"【{title}】\n")
-            lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
-            lines.append("-" * 80 + "\n")
-            
-            for row in iterable:
-                _due_raw = str(row.get('due_date', ''))
-                due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
-                task = str(row.get('task', '')).replace('\n', ' ')
-                recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
-                lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
-            lines.append("\n")
+    with top_tab1:
 
-        add_section("⚡ 今日急需处理", final_today_open)
-        add_section("🌙 明日事项", final_tomorrow_open)
-        add_section("🗓️ 本周剩余事项", final_week_open)
-        add_section("⏳ 本月剩余事项", final_later_open)
-        add_section("🔄 长期循环事项", recurring_list)
-        add_section("✅ 已完成事项归档", completed_tasks)
-        
-        return "".join(lines) if len(lines) > 2 else "没有任务数据。"
+            def generate_txt_report():
+                lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Add Task Section & Download
-    def handle_add_cb():
-        st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
-        st.session_state["input_new_task"] = ""
+                def add_section(title, task_list):
+                    # Ensure we handle DataFrame vs List of Dicts properly
+                    if isinstance(task_list, pd.DataFrame):
+                        if task_list.empty: return
+                        iterable = [row.to_dict() for _, row in task_list.iterrows()]
+                    else:
+                        if not task_list: return
+                        iterable = task_list
 
-    col_add_input, col_add_btn, col_dl_btn = st.columns([0.50, 0.20, 0.30], vertical_alignment="bottom")
-    with col_add_input:
-        st.text_input("➕ 新增事项:", placeholder="请输入需要添加的代办事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
-    with col_add_btn:
-        if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
-            pass
-    with col_dl_btn:
-        if not tasks_df.empty:
-            txt_content = generate_txt_report()
-            st.download_button(
-                label="📥 下载待办事项清单",
-                data=txt_content,
-                file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
-                mime="text/plain",
-                key="dl_btn_header_v1",
-                use_container_width=True
-            )
+                    lines.append(f"【{title}】\n")
+                    lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
+                    lines.append("-" * 80 + "\n")
 
-    task_to_add = st.session_state.get("temp_task_text")
-    if task_to_add:
-        with st.spinner("AI 解析并提交中..."):
-            res = add_task(task_to_add)
-            st.session_state["last_add_result"] = res
-            st.session_state["temp_task_text"] = None
-            st.rerun()
+                    for row in iterable:
+                        _due_raw = str(row.get('due_date', ''))
+                        due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
+                        task = str(row.get('task', '')).replace('\n', ' ')
+                        recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
+                        lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
+                    lines.append("\n")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+                add_section("⚡ 今日急需处理", final_today_open)
+                add_section("🌙 明日事项", final_tomorrow_open)
+                add_section("🗓️ 本周剩余事项", final_week_open)
+                add_section("⏳ 本月剩余事项", final_later_open)
+                add_section("🔄 长期循环事项", recurring_list)
+                add_section("✅ 已完成事项归档", completed_tasks)
 
-    t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"])
+                return "".join(lines) if len(lines) > 2 else "没有任务数据。"
 
-    with t1:
-        if tasks_df.empty:
-            st.info("目前没有任务。在侧边栏添加一个吧！")
-        else:
+            st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- Displays Tab 1 ---
-            if final_today_open:
-                st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
-                for row in final_today_open: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
+            # Add Task Section & Download
+            def handle_add_cb():
+                st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
+                st.session_state["input_new_task"] = ""
 
-            if final_tomorrow_open:
-                st.markdown('<div class="section-header">🌙 明日事项</div>', unsafe_allow_html=True)
-                for row in final_tomorrow_open: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
-            
-            if final_week_open:
-                st.markdown('<div class="section-header">🗓️ 本周剩余事项</div>', unsafe_allow_html=True)
-                for row in final_week_open: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
-                
-            if final_later_open:
-                st.markdown('<div class="section-header">⏳ 本月剩余事项</div>', unsafe_allow_html=True)
-                for row in final_later_open: render_task(row, is_shadow=row['_is_shadow'], location="final_later")
+            col_add_input, col_add_btn, col_dl_btn = st.columns([0.50, 0.20, 0.30], vertical_alignment="bottom")
+            with col_add_input:
+                st.text_input("➕ 新增事项:", placeholder="请输入需要添加的代办事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
+            with col_add_btn:
+                if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
+                    pass
+            with col_dl_btn:
+                if not tasks_df.empty:
+                    txt_content = generate_txt_report()
+                    st.download_button(
+                        label="📥 下载待办事项清单",
+                        data=txt_content,
+                        file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="dl_btn_header_v1",
+                        use_container_width=True
+                    )
 
-    with t2:
-        st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
-        if not recurring_list:
-            st.info("目前没有循环事项。您可以添加如“每周二购买零食”来创建。")
-        else:
-            for row in recurring_list:
-                render_task(row, location="recur_tab")
+            task_to_add = st.session_state.get("temp_task_text")
+            if task_to_add:
+                with st.spinner("AI 解析并提交中..."):
+                    res = add_task(task_to_add)
+                    st.session_state["last_add_result"] = res
+                    st.session_state["temp_task_text"] = None
+                    st.rerun()
 
-    with t3:
-        st.markdown('<div class="section-header">✅ 已完成事项归档</div>', unsafe_allow_html=True)
-        if completed_tasks.empty:
-            st.info("目前没有已完成的事项。")
-        else:
-            for _, row in completed_tasks.iterrows():
-                is_shade = row.get('_is_shadow', False)
-                render_task(row, is_shadow=is_shade, location="comp_tab")
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"])
+
+            with t1:
+                if tasks_df.empty:
+                    st.info("目前没有任务。在侧边栏添加一个吧！")
+                else:
+
+                    # --- Displays Tab 1 ---
+                    if final_today_open:
+                        st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
+                        for row in final_today_open: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
+
+                    if final_tomorrow_open:
+                        st.markdown('<div class="section-header">🌙 明日事项</div>', unsafe_allow_html=True)
+                        for row in final_tomorrow_open: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
+
+                    if final_week_open:
+                        st.markdown('<div class="section-header">🗓️ 本周剩余事项</div>', unsafe_allow_html=True)
+                        for row in final_week_open: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
+
+                    if final_later_open:
+                        st.markdown('<div class="section-header">⏳ 本月剩余事项</div>', unsafe_allow_html=True)
+                        for row in final_later_open: render_task(row, is_shadow=row['_is_shadow'], location="final_later")
+
+            with t2:
+                st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
+                if not recurring_list:
+                    st.info("目前没有循环事项。您可以添加如“每周二购买零食”来创建。")
+                else:
+                    for row in recurring_list:
+                        render_task(row, location="recur_tab")
+
+            with t3:
+                st.markdown('<div class="section-header">✅ 已完成事项归档</div>', unsafe_allow_html=True)
+                if completed_tasks.empty:
+                    st.info("目前没有已完成的事项。")
+                else:
+                    for _, row in completed_tasks.iterrows():
+                        is_shade = row.get('_is_shadow', False)
+                        render_task(row, is_shadow=is_shade, location="comp_tab")
+
+    with top_tab2:
+        st.subheader('🎯 我的健身目标')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('📅 健身计划')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('✅ 每次健身项目完成记录')
+        st.info('内容可以先为空，我后面会继续加入。')
+
+    with top_tab3:
+        st.subheader('💵 当前家庭财务一览')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('📈 投资一览表')
+        st.info('内容可以先为空，我后面会继续加入。')
+
+
+    with top_tab2:
+        st.subheader('🎯 我的健身目标')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('📅 健身计划')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('✅ 每次健身项目完成记录')
+        st.info('内容可以先为空，我后面会继续加入。')
+
+    with top_tab3:
+        st.subheader('💵 当前家庭财务一览')
+        st.info('内容可以先为空，我后面会继续加入。')
+        st.subheader('📈 投资一览表')
+        st.info('内容可以先为空，我后面会继续加入。')
+
 
 
     st.markdown("---")
