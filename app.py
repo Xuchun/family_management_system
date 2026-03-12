@@ -239,28 +239,40 @@ try:
     init_db()
 
     # --- 🔐 登录逻辑与持久化验证 ---
+    # 使用全新 Key 确保清理所有旧的冲突 Cookie 状态
+    AUTH_KEY = "family_auth_persistent"
+    
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
     
-    # 核心：必须同步等待 Cookie 管理器就绪，否则刷新必掉线
-    cookies = cookie_manager.get_all()
-    if cookies is None:
-        st.stop() # 异步等待，不渲染任何 UI
+    # 核心：多轮同步机制。Streamlit 组件在刷新后需要 1-2 个周期才能真正拿到 Cookie。
+    if "sync_rounds" not in st.session_state:
+        st.session_state["sync_rounds"] = 0
+
+    # 尝试直接读取特定 Cookie，而不是 get_all()，有时更稳定
+    auth_val = cookie_manager.get(AUTH_KEY)
     
-    # 处理登出请求
+    # 同步屏障：如果还没取到（None），强制阻断并让组件继续同步
+    if auth_val is None:
+        if st.session_state["sync_rounds"] < 3: # 最多等待 3 轮同步
+            st.session_state["sync_rounds"] += 1
+            st.stop()
+    
+    # 处理登出请求 (立即生效)
     if st.session_state.get("logout_requested"):
-        cookie_manager.set("family_system_auth", "", expires_at=datetime.now() - timedelta(days=365), path="/")
+        cookie_manager.set(AUTH_KEY, "", expires_at=datetime.now() - timedelta(days=365), path="/")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
-        components.html("<script>window.parent.document.cookie = 'family_system_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>", height=0)
+        st.session_state["sync_rounds"] = 0
+        components.html(f"<script>window.parent.document.cookie = '{AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';</script>", height=0)
         st.rerun()
 
-    # 静默尝试恢复认证：如果 Session 掉了但 Cookie 还在
+    # 静默身份恢复：Cookie -> Session
     if not st.session_state["authenticated"]:
-        if cookies.get("family_system_auth") == "authenticated":
+        if auth_val == "authenticated":
             st.session_state["authenticated"] = True
-            # 不要在这里 st.rerun()，让它自然流淌到主要 UI 代码，防止死循环
-    
+            st.rerun() # 立即进入主程序界面
+
     # 渲染逻辑控制
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
@@ -271,16 +283,17 @@ try:
                 pwd = st.text_input("请输入访问密码 (6位数字):", type="password", key="login_pwd")
                 if pwd == app_pwd:
                     st.session_state["authenticated"] = True
-                    # 双重锁合设置：组建 + 原生 JS
-                    cookie_manager.set("family_system_auth", "authenticated", expires_at=datetime.now() + timedelta(days=30), path="/")
+                    st.session_state["sync_rounds"] = 0
+                    # 写入 30 天持久化 Cookie (双重保障)
+                    cookie_manager.set(AUTH_KEY, "authenticated", expires_at=datetime.now() + timedelta(days=30), path="/")
                     exp_utc = (datetime.now() + timedelta(days=30)).strftime("%a, %d %b %Y %H:%M:%S GMT")
-                    components.html(f"<script>window.parent.document.cookie = 'family_system_auth=authenticated; expires={exp_utc}; path=/; SameSite=Lax';</script>", height=0)
+                    components.html(f"<script>window.parent.document.cookie = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=Lax';</script>", height=0)
                     st.success("✅ 登录成功！")
                     st.rerun()
                 elif pwd:
                     st.error("🚫 密码错误")
                 st.info("💡 提示：密码是6位数字。")
-            st.stop() # 强制阻断，没登录成功不许看下面的内容
+            st.stop() # 没通过前绝不加载主程序代码
             
     # 一旦认证成功，如果原本显示了登录界面，现在将其清空
     if st.session_state["authenticated"]:
