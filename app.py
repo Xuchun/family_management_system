@@ -592,11 +592,11 @@ try:
                 st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
                 st.session_state["input_new_task"] = ""
 
-            col_add_input, col_add_btn, col_dl_btn = st.columns([0.50, 0.20, 0.30], vertical_alignment="bottom")
+            col_add_input, col_add_btn, col_dl_btn = st.columns([0.65, 0.15, 0.20], vertical_alignment="bottom")
             with col_add_input:
                 st.text_input("➕ 新增事项:", placeholder="请输入需要添加的代办事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
             with col_add_btn:
-                if st.button("立即添加", use_container_width=True, on_click=handle_add_cb):
+                if st.button("立即添加新事项", use_container_width=True, on_click=handle_add_cb):
                     pass
             with col_dl_btn:
                 if not tasks_df.empty:
