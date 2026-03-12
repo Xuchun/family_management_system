@@ -469,6 +469,13 @@ try:
             except: today_list.append(row)
 
         for item in recurring_list:
+            # Check last 7 days for missed recurring items
+            past_ptr = today_date - timedelta(days=7)
+            while past_ptr < today_date:
+                if hits_day(item['recurring_pattern'], past_ptr):
+                    shadow_overdue.append((item, past_ptr))
+                past_ptr += timedelta(days=1)
+
             if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
             if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
             
@@ -529,7 +536,7 @@ try:
         
         return open_list, done_list
 
-    final_overdue_open, final_overdue_done = prepare_sorted_list(overdue_list, shadow_items_plain=shadow_overdue)
+    final_overdue_open, final_overdue_done = prepare_sorted_list(overdue_list, shadow_items_with_dates=shadow_overdue)
     final_today_open, final_today_done = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
     final_tomorrow_open, final_tomorrow_done = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
     final_week_open, final_week_done = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
@@ -578,7 +585,7 @@ try:
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
-        st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
     with c_empty:
         pass
 
