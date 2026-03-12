@@ -201,10 +201,7 @@ st.markdown("""
         font-size: 2rem !important; 
         font-weight: 700; 
         padding: 1rem 0; 
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        white-space: nowrap;
+        text-align: center;
     }
     .section-header { 
         color: #1e3a8a; font-weight: 700; padding: 1.5rem 0 0.5rem 0; font-size: 1.2rem;
@@ -542,11 +539,13 @@ try:
         st.session_state["logout_requested"] = True
 
     # Header Row
-    c_logout, c_title = st.columns([0.15, 0.85], vertical_alignment="bottom")
+    c_logout, c_title, c_empty = st.columns([0.15, 0.70, 0.15], vertical_alignment="center")
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
         st.markdown("<h1 class='main-header'>🏠 家庭管理系统</h1>", unsafe_allow_html=True)
+    with c_empty:
+        pass
 
     st.markdown('<br>', unsafe_allow_html=True)
     top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '💪 我的健身', '💰 家庭财务'])
