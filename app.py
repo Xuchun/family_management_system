@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "1.9"
+VERSION = "2.0"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -62,11 +62,21 @@ def init_db():
         if 'recurring_pattern' not in columns:
             c.execute("ALTER TABLE tasks ADD COLUMN recurring_pattern TEXT")
     
-    # New table for individual recurring task completions
-    c.execute('''CREATE TABLE IF NOT EXISTS recurring_completions
-                 (task_id INTEGER, 
-                  completed_date TEXT,
-                  PRIMARY KEY (task_id, completed_date))''')
+    # 身高体重记录表
+    c.execute('''CREATE TABLE IF NOT EXISTS enya_vitals
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  record_date TEXT NOT NULL,
+                  height REAL,
+                  weight REAL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+                  
+    # 月经记录表
+    c.execute('''CREATE TABLE IF NOT EXISTS enya_period
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  record_date TEXT NOT NULL,
+                  event_type TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
     conn.commit()
     conn.close()
 
@@ -205,6 +215,47 @@ def get_recurring_completions():
         return df
     except:
         return pd.DataFrame(columns=['task_id', 'completed_date'])
+
+# --- 恩雅的健康相关函数 ---
+def get_enya_vitals():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM enya_vitals ORDER BY record_date DESC", conn)
+    conn.close()
+    return df
+
+def add_enya_vital(date_str, height, weight):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", (date_str, height, weight))
+    conn.commit()
+    conn.close()
+
+def delete_enya_vital(vital_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM enya_vitals WHERE id = ?", (vital_id,))
+    conn.commit()
+    conn.close()
+
+def get_enya_periods():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM enya_period ORDER BY record_date DESC", conn)
+    conn.close()
+    return df
+
+def add_enya_period(date_str, event_type):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO enya_period (record_date, event_type) VALUES (?, ?)", (date_str, event_type))
+    conn.commit()
+    conn.close()
+
+def delete_enya_period(period_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM enya_period WHERE id = ?", (period_id,))
+    conn.commit()
+    conn.close()
 
 # --- 5. UI Styling ---
 st.markdown("""
@@ -602,7 +653,7 @@ try:
         pass
 
     st.markdown('<br>', unsafe_allow_html=True)
-    top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '💪 我的健身', '💰 家庭财务'])
+    top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💪 我的健身', '💰 家庭财务', '🌸 恩雅的健康'])
 
     with top_tab1:
 
@@ -751,6 +802,72 @@ try:
         st.info('内容可以先为空，我后面会继续加入。')
         st.subheader('📈 投资一览表')
         st.info('内容可以先为空，我后面会继续加入。')
+
+    with top_tab4:
+        st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
+        
+        health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"])
+        
+        with health_sub1:
+            st.markdown("### 📊 新增记录")
+            cols_v = st.columns([0.3, 0.2, 0.2, 0.3], vertical_alignment="bottom")
+            with cols_v[0]:
+                v_date = st.date_input("日期", value=get_now_sgt().date(), key="v_date_inp")
+            with cols_v[1]:
+                v_height = st.number_input("身高 (cm)", min_value=0.0, step=0.1, key="v_height_inp")
+            with cols_v[2]:
+                v_weight = st.number_input("体重 (kg)", min_value=0.0, step=0.1, key="v_weight_inp")
+            with cols_v[3]:
+                if st.button("➕ 保存记录", use_container_width=True, key="v_save_btn"):
+                    add_enya_vital(v_date.strftime("%Y-%m-%d"), v_height, v_weight)
+                    st.success("记录已保存！")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📜 历史记录")
+            vitals_df = get_enya_vitals()
+            if vitals_df.empty:
+                st.info("尚无身高体重记录。")
+            else:
+                # 使用 DataFrame 显示表格，带删除按钮
+                for idx, row in vitals_df.iterrows():
+                    v_cols = st.columns([0.25, 0.25, 0.25, 0.25])
+                    v_cols[0].write(row['record_date'])
+                    v_cols[1].write(f"{row['height']} cm")
+                    v_cols[2].write(f"{row['weight']} kg")
+                    if v_cols[3].button("🗑️", key=f"del_v_{row['id']}"):
+                        delete_enya_vital(row['id'])
+                        st.rerun()
+                    st.divider()
+
+        with health_sub2:
+            st.markdown("### 🩸 新增经期记录")
+            cols_p = st.columns([0.3, 0.4, 0.3], vertical_alignment="bottom")
+            with cols_p[0]:
+                p_date = st.date_input("日期", value=get_now_sgt().date(), key="p_date_inp")
+            with cols_p[1]:
+                p_type = st.selectbox("事件内容", ["月经开始", "月经结束"], key="p_type_inp")
+            with cols_p[2]:
+                if st.button("➕ 保存记录", use_container_width=True, key="p_save_btn"):
+                    add_enya_period(p_date.strftime("%Y-%m-%d"), p_type)
+                    st.success("记录已保存！")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📜 经期历史记录")
+            periods_df = get_enya_periods()
+            if periods_df.empty:
+                st.info("尚无月经记录。")
+            else:
+                for idx, row in periods_df.iterrows():
+                    p_cols = st.columns([0.3, 0.4, 0.3])
+                    p_cols[0].write(row['record_date'])
+                    p_color = "#e11d48" if row['event_type'] == "月经开始" else "#059669"
+                    p_cols[1].markdown(f"**<span style='color: {p_color};'>{row['event_type']}</span>**", unsafe_allow_html=True)
+                    if p_cols[2].button("🗑️", key=f"del_p_{row['id']}"):
+                        delete_enya_period(row['id'])
+                        st.rerun()
+                    st.divider()
 
 
 
