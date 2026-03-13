@@ -14,7 +14,7 @@ import time
 import threading
 import hashlib
 
-VERSION = "3.9"
+VERSION = "4.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
