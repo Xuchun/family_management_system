@@ -9,11 +9,9 @@ from dotenv import load_dotenv
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import json
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload
+import requests
 
-VERSION = "3.0"
+VERSION = "3.2"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -31,13 +29,11 @@ load_dotenv()
 try:
     api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
     app_pwd = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else os.getenv("APP_PASSWORD")
-    g_service_json = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"] if "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets else os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-    g_folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"] if "GOOGLE_DRIVE_FOLDER_ID" in st.secrets else os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+    g_script_url = st.secrets["GOOGLE_BACKUP_URL"] if "GOOGLE_BACKUP_URL" in st.secrets else os.getenv("GOOGLE_BACKUP_URL")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
     app_pwd = os.getenv("APP_PASSWORD")
-    g_service_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-    g_folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+    g_script_url = os.getenv("GOOGLE_BACKUP_URL")
 
 client = OpenAI(api_key=api_key) if api_key else None
 SGT = pytz.timezone('Asia/Singapore')
@@ -49,31 +45,24 @@ if not os.path.exists("data"):
     os.makedirs("data")
 DB_FILE = "data/tasks.db"
 
-# --- 4. Google Drive Backup Engine ---
+# --- 4. Google Drive Backup Engine (via Apps Script Bridge) ---
 def backup_to_gdrive(content_str, filename):
-    if not g_service_json or not g_folder_id:
-        return False, "⚠️ 未检测到 Google Drive 配置凭证。"
+    if not g_script_url:
+        return False, "⚠️ 未检测到 Google 备份 URL。"
     
     try:
-        # 转换 JSON 字符串为凭据对象
-        service_info = json.loads(g_service_json)
-        credentials = service_account.Credentials.from_service_account_info(
-            service_info, 
-            scopes=['https://www.googleapis.com/auth/drive.file']
-        )
-        service = build('drive', 'v3', credentials=credentials)
-        
-        file_metadata = {
-            'name': filename,
-            'parents': [g_folder_id]
+        payload = {
+            "filename": filename,
+            "content": content_str
         }
-        media = MediaInMemoryUpload(content_str.encode('utf-8'), mimetype='text/plain')
+        response = requests.post(g_script_url, json=payload, timeout=30)
         
-        # 上传文件
-        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        return True, f"✅ 备份成功！文件 ID: {file.get('id')}"
+        if response.status_code == 200 and "Success" in response.text:
+            return True, "✅ 云端备份成功！"
+        else:
+            return False, f"❌ 备份失败: {response.text}"
     except Exception as e:
-        return False, f"❌ 备份失败: {str(e)}"
+        return False, f"❌ 网络请求错误: {str(e)}"
 
 # --- 4. Database Functions ---
 def init_db():
