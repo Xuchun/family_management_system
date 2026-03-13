@@ -393,7 +393,8 @@ def run_auto_backup_logic(silent=True):
                 
                 if last_date != current_date:
                     content = generate_master_report()
-                    filename = f"Autonomous_Backup_{target_slot}_{current_date}.txt"
+                    timestamp = now.strftime("%Y%m%d_%H%M")
+                    filename = f"Family_Backup_{timestamp}.txt"
                     success, msg = backup_to_gdrive(content, filename)
                     
                     if success:
@@ -835,7 +836,7 @@ try:
             with st.spinner("同步中..."):
                 content = generate_master_report()
                 timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
-                success, msg = backup_to_gdrive(content, f"Manual_Full_Backup_{timestamp}.txt")
+                success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
                 if success:
                     st.toast(msg, icon="✅")
                 else:
