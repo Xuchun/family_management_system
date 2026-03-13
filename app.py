@@ -558,20 +558,18 @@ try:
 
     # 1. 深度持久化验证 (Native + Session + Fallback)
     native_cookies = st.context.cookies
-    # 增加 manual_logout 阻断位，防止登出后瞬间被 Cookie 重新登录
-    # 且只有当 Cookie 值严格等于 'authenticated' 时才允许自动登录
     if not st.session_state["authenticated"] and not st.session_state.get("manual_logout"):
         current_token = native_cookies.get(AUTH_KEY)
-        if current_token == "authenticated":
+        if current_token in ["authenticated", "authenticated_admin"]:
             st.session_state["authenticated"] = True
+            st.session_state["is_admin"] = (current_token == "authenticated_admin")
         elif current_token == "LOGGED_OUT":
-            # 明确已登出，不做任何动作
             pass
         else:
-            # 尝试通过组件二次确认 (支持旧版逻辑兼容)
             mgr_val = cookie_manager.get(AUTH_KEY)
-            if mgr_val == "authenticated":
+            if mgr_val in ["authenticated", "authenticated_admin"]:
                 st.session_state["authenticated"] = True
+                st.session_state["is_admin"] = (mgr_val == "authenticated_admin")
                 st.rerun()
 
     # 2. 处理登出请求
@@ -606,9 +604,19 @@ try:
                     st.session_state["authenticated"] = True
                     st.session_state["manual_logout"] = False
                     st.session_state["is_admin"] = False
-                    # 设置认证 Cookie
+                    # 设置认证 Cookie (持久化 30 天)
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
+                    
+                    # 强力锁定：使用原生 JS 设置
+                    exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
+                    components.html(f"""
+                        <script>
+                            var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=Lax';
+                            document.cookie = c_str;
+                            if(window.parent) window.parent.document.cookie = c_str;
+                        </script>
+                    """, height=0)
                     st.success("✅ 登录成功！")
                     st.rerun()
                 elif pwd:
@@ -637,10 +645,25 @@ try:
                 # 实际上由于是个人工具，我们可以通过 OAuth 授权后的 URL 参数进行第一步判定
                 # 后面我们可以进一步增强 Token 验证
                 st.toast("正在验证管理员身份...", icon="🔍")
-                # 假设验证成功进入 (后续可增加 requests.post 换取 userinfo 的逻辑)
                 st.session_state["authenticated"] = True
                 st.session_state["is_admin"] = True
                 st.session_state["manual_logout"] = False
+                
+                # 设置管理员持久化 Cookie
+                exp_date = datetime.now() + timedelta(days=30)
+                cookie_manager.set(AUTH_KEY, "authenticated_admin", expires_at=exp_date, path="/")
+                
+                # 强力锁定：使用原生 JS 设置
+                exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
+                components.html(f"""
+                    <script>
+                        var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=Lax';
+                        document.cookie = c_str;
+                        if(window.parent) window.parent.document.cookie = c_str;
+                    </script>
+                """, height=0)
+                
+                time.sleep(0.5)
                 st.rerun()
             
             st.stop()
