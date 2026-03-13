@@ -561,15 +561,21 @@ try:
     q_params = st.query_params
     
     def resolve_token():
-        # A. 极致优先：从 URL 参数读取 (最强力，抗任何刷新)
+        # 0. 核心防线：如果 Cookie 明确标记为注销，则直接否决所有登录（包括 URL 钥匙）
+        cookie_val = native_cookies.get(AUTH_KEY)
+        if cookie_val == "LOGGED_OUT":
+            return None
+            
+        # A. 极致优先：从 URL 参数读取
         url_token = q_params.get("auth_key")
         if url_token in ["authenticated", "authenticated_admin"]:
             return url_token
-        # B. 核心方案：从浏览器原生请求头读取
-        cookie_token = native_cookies.get(AUTH_KEY)
-        if cookie_token in ["authenticated", "authenticated_admin"]:
-            return cookie_token
-        # C. 备选方案：从组件读取
+        
+        # B. 如果 URL 没有，但 Cookie 有（且不是 LOGGED_OUT）
+        if cookie_val in ["authenticated", "authenticated_admin"]:
+            return cookie_val
+            
+        # C. 备选方案：通过组件读取
         try:
             comp_token = cookie_manager.get(AUTH_KEY)
             if comp_token in ["authenticated", "authenticated_admin"]:
@@ -603,19 +609,29 @@ try:
     if st.session_state.get("logout_requested"):
         # 清除各种身份信息
         cookie_manager.set(AUTH_KEY, "LOGGED_OUT", expires_at=datetime.now() + timedelta(days=30), path="/")
-        st.query_params.clear() # 抹掉 URL 钥匙
+        st.query_params.clear() 
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
         st.session_state["manual_logout"] = True
-        # JS 强力清理
+        
+        # 物理性强力清除：不但清 Cookie，还要把 URL 彻底洗干净并刷新
         components.html(f"""
             <script>
-                document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000; SameSite=None; Secure; Partitioned';
-                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000; SameSite=None; Secure; Partitioned';
+                // 1. 设置注销 Cookie
+                var c_str = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000; SameSite=None; Secure; Partitioned';
+                document.cookie = c_str;
+                if(window.parent) window.parent.document.cookie = c_str;
+                
+                // 2. 彻底抹除地址栏并刷新 (防止回退或再次刷新进入)
+                var clean_url = window.location.origin + window.location.pathname;
+                if(window.parent) {{
+                    window.parent.location.href = clean_url;
+                }} else {{
+                    window.location.href = clean_url;
+                }}
             </script>
         """, height=0)
-        time.sleep(0.5)
-        st.rerun()
+        st.stop() # 停止后续渲染，静候 JS 跳转
 
     # 3. 渲染登录界面 (仅在仍未通过验证时)
     login_placeholder = st.empty()
