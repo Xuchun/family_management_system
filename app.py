@@ -559,34 +559,36 @@ try:
     # 1. 深度持久化验证 (Native + Session + Fallback)
     native_cookies = st.context.cookies
     
-    # 尝试多种来源提取 Token
     def resolve_token():
-        # 优先原生
+        # 1. 优先尝试从原生请求头提取 (最快)
         token = native_cookies.get(AUTH_KEY)
         if token in ["authenticated", "authenticated_admin"]:
             return token
-        # 其次组件
-        token = cookie_manager.get(AUTH_KEY)
-        if token in ["authenticated", "authenticated_admin"]:
-            return token
+        # 2. 尝试从 CookieManager 组件提取
+        try:
+            token = cookie_manager.get(AUTH_KEY)
+            if token in ["authenticated", "authenticated_admin"]:
+                return token
+        except:
+            pass
         return None
 
-    # 认证逻辑门控
+    # 初始化重试状态
+    if "auth_retry_count" not in st.session_state:
+        st.session_state["auth_retry_count"] = 0
+
+    # 认证逻辑
     if not st.session_state.get("authenticated") and not st.session_state.get("manual_logout"):
         found_token = resolve_token()
         if found_token:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
             st.rerun()
-        else:
-            # 这里的巧妙之处：如果还在等待组件加载，先不急着显示登录框
-            # 我们可以通过 session_state 计数器给组件 1-2 次 Rerun 的机会来“回暖”数据
-            if "auth_retry_count" not in st.session_state:
-                st.session_state["auth_retry_count"] = 0
-            
-            if st.session_state["auth_retry_count"] < 2:
-                st.session_state["auth_retry_count"] += 1
-                st.toast("🔍 正在验证自动登录...", icon="🛡️")
+        elif st.session_state["auth_retry_count"] < 5:
+            # 给浏览器一点时间冷启动组件 (重要：不显示登录框，只显示加载)
+            st.session_state["auth_retry_count"] += 1
+            with st.container():
+                st.markdown("<div style='text-align:center; margin-top:100px;'><h2 style='color:#1e3a8a;'>🛡️ 正在验证访问权限...</h2><p style='color:#9ca3af;'>请稍候，系统正在为您自动登录</p></div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
 
@@ -626,11 +628,11 @@ try:
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
                     
-                    # 强力锁定：使用原生 JS 设置
+                    # 强力锁定：使用原生 JS 设置 (关键：跨域嵌套环境需 SameSite=None; Secure)
                     exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
                     components.html(f"""
                         <script>
-                            var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=Lax';
+                            var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=None; Secure';
                             document.cookie = c_str;
                             if(window.parent) window.parent.document.cookie = c_str;
                         </script>
@@ -675,7 +677,7 @@ try:
                 exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
                 components.html(f"""
                     <script>
-                        var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=Lax';
+                        var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=None; Secure';
                         document.cookie = c_str;
                         if(window.parent) window.parent.document.cookie = c_str;
                     </script>
