@@ -528,11 +528,9 @@ try:
         st.session_state["authenticated"] = False
 
     # 1. 深度持久化验证 (Native + Session + Fallback)
-    # 我们采用“优先信任、异步补录”策略
     native_cookies = st.context.cookies
-    
-    # 尝试从所有可能的来源提取凭证
-    if not st.session_state["authenticated"]:
+    # 增加 manual_logout 阻断位，防止登出后瞬间被 Cookie 重新登录
+    if not st.session_state["authenticated"] and not st.session_state.get("manual_logout"):
         # 强制检查原生 Cookie (最快)
         if native_cookies.get(AUTH_KEY) == "authenticated":
             st.session_state["authenticated"] = True
@@ -541,7 +539,7 @@ try:
             mgr_val = cookie_manager.get(AUTH_KEY)
             if mgr_val == "authenticated":
                 st.session_state["authenticated"] = True
-                st.rerun() # 发现凭证，强制重绘界面进入主程序
+                st.rerun()
 
     # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
@@ -568,6 +566,7 @@ try:
                 pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd")
                 if pwd == app_pwd:
                     st.session_state["authenticated"] = True
+                    st.session_state["manual_logout"] = False # 登录成功，清除登出标记
                     # 设置持久化 Cookie (30天)
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
@@ -853,6 +852,8 @@ try:
 
     def handle_logout():
         st.session_state["logout_requested"] = True
+        st.session_state["authenticated"] = False
+        st.session_state["manual_logout"] = True
 
     # Header Row
     c_logout, c_title, c_sync = st.columns([0.15, 0.70, 0.15], vertical_alignment="center")
