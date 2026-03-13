@@ -960,7 +960,7 @@ try:
         st.session_state["manual_logout"] = True
 
     # Header Row
-    c_logout, c_title, c_sync = st.columns([0.15, 0.70, 0.15], vertical_alignment="center")
+    c_logout, c_title, c_sync = st.columns([0.12, 0.66, 0.22], vertical_alignment="center")
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
@@ -971,7 +971,7 @@ try:
             if msg_key in st.session_state:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
     with c_sync:
-        col_admin, col_manual = st.columns([0.4, 0.6])
+        col_admin, col_manual = st.columns([0.3, 0.7])
         with col_admin:
             # 只有通过 Gmail 登录的管理员才能看到盾牌图标
             if st.session_state.get("is_admin"):
