@@ -629,7 +629,6 @@ try:
                 )
                 
                 st.link_button("🔑 使用 Gmail 快速登录 (管理员)", google_auth_url, use_container_width=True, help="忘记密码？用您的 Gmail 找回")
-                st.info("💡 提示：女儿请通过上方 6 位数字密码进入。")
             
             # --- 🛡️ 捕捉 Google 回调逻辑 ---
             q_params = st.query_params
