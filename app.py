@@ -558,19 +558,36 @@ try:
 
     # 1. 深度持久化验证 (Native + Session + Fallback)
     native_cookies = st.context.cookies
-    if not st.session_state["authenticated"] and not st.session_state.get("manual_logout"):
-        # 优先从原生 Cookie 读
-        current_token = native_cookies.get(AUTH_KEY)
-        if current_token in ["authenticated", "authenticated_admin"]:
+    
+    # 尝试多种来源提取 Token
+    def resolve_token():
+        # 优先原生
+        token = native_cookies.get(AUTH_KEY)
+        if token in ["authenticated", "authenticated_admin"]:
+            return token
+        # 其次组件
+        token = cookie_manager.get(AUTH_KEY)
+        if token in ["authenticated", "authenticated_admin"]:
+            return token
+        return None
+
+    # 认证逻辑门控
+    if not st.session_state.get("authenticated") and not st.session_state.get("manual_logout"):
+        found_token = resolve_token()
+        if found_token:
             st.session_state["authenticated"] = True
-            st.session_state["is_admin"] = (current_token == "authenticated_admin")
-            st.rerun() # 命中了持久化，强制刷新一次以载入主界面
+            st.session_state["is_admin"] = (found_token == "authenticated_admin")
+            st.rerun()
         else:
-            # 备选方案：尝试从 Cookie 组件读
-            mgr_val = cookie_manager.get(AUTH_KEY)
-            if mgr_val in ["authenticated", "authenticated_admin"]:
-                st.session_state["authenticated"] = True
-                st.session_state["is_admin"] = (mgr_val == "authenticated_admin")
+            # 这里的巧妙之处：如果还在等待组件加载，先不急着显示登录框
+            # 我们可以通过 session_state 计数器给组件 1-2 次 Rerun 的机会来“回暖”数据
+            if "auth_retry_count" not in st.session_state:
+                st.session_state["auth_retry_count"] = 0
+            
+            if st.session_state["auth_retry_count"] < 2:
+                st.session_state["auth_retry_count"] += 1
+                st.toast("🔍 正在验证自动登录...", icon="🛡️")
+                time.sleep(0.5)
                 st.rerun()
 
     # 2. 处理登出请求
