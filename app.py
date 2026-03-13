@@ -556,19 +556,24 @@ try:
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
-    # 1. 深度持久化验证 (Native + Session + Fallback)
+    # 1. 深度持久化验证 (Native + Session + Fallback + URL)
     native_cookies = st.context.cookies
+    q_params = st.query_params
     
     def resolve_token():
-        # A. 极致优先：从浏览器原生请求头读取 (最抗刷新)
-        token = native_cookies.get(AUTH_KEY)
-        if token in ["authenticated", "authenticated_admin"]:
-            return token
-        # B. 次要方案：从组件读取 (用于冷启动同步)
+        # A. 极致优先：从 URL 参数读取 (最强力，抗任何刷新)
+        url_token = q_params.get("auth_key")
+        if url_token in ["authenticated", "authenticated_admin"]:
+            return url_token
+        # B. 核心方案：从浏览器原生请求头读取
+        cookie_token = native_cookies.get(AUTH_KEY)
+        if cookie_token in ["authenticated", "authenticated_admin"]:
+            return cookie_token
+        # C. 备选方案：从组件读取
         try:
-            val = cookie_manager.get(AUTH_KEY)
-            if val in ["authenticated", "authenticated_admin"]:
-                return val
+            comp_token = cookie_manager.get(AUTH_KEY)
+            if comp_token in ["authenticated", "authenticated_admin"]:
+                return comp_token
         except:
             pass
         return None
@@ -583,30 +588,33 @@ try:
         if found_token:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
+            # 同步回 URL，确保刷新不丢
+            st.query_params["auth_key"] = found_token
             st.rerun()
-        elif st.session_state["auth_retry_count"] < 10: # 延长回暖期到 5-10 秒，应对极慢网络
+        elif st.session_state["auth_retry_count"] < 8: # 稍微缩短重试，因为 URL 识别是非常快的
             st.session_state["auth_retry_count"] += 1
             with st.container():
                 st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
-                st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全连接中，请稍候...</div>", unsafe_allow_html=True)
-                time.sleep(0.5)
+                st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在恢复访问权限...</div>", unsafe_allow_html=True)
+                time.sleep(0.4)
                 st.rerun()
 
     # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
-        # 写入明确的“已登出”指令 (不再仅仅是清空)
+        # 清除各种身份信息
         cookie_manager.set(AUTH_KEY, "LOGGED_OUT", expires_at=datetime.now() + timedelta(days=30), path="/")
+        st.query_params.clear() # 抹掉 URL 钥匙
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
         st.session_state["manual_logout"] = True
         # JS 强力清理
         components.html(f"""
             <script>
-                document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000;';
-                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000;';
+                document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000; SameSite=None; Secure; Partitioned';
+                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000; SameSite=None; Secure; Partitioned';
             </script>
         """, height=0)
-        time.sleep(0.5) # 给浏览器和网络一点时间记录注销指令
+        time.sleep(0.5)
         st.rerun()
 
     # 3. 渲染登录界面 (仅在仍未通过验证时)
@@ -624,7 +632,8 @@ try:
                     st.session_state["authenticated"] = True
                     st.session_state["manual_logout"] = False
                     st.session_state["is_admin"] = False
-                    # 设置认证 Cookie (持久化 30 天)
+                    # 设置各种持久化
+                    st.query_params["auth_key"] = "authenticated"
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
                     
@@ -683,8 +692,9 @@ try:
                     </script>
                 """, height=0)
                 
-                # 重要：清除地址栏的 code 参数，防止刷新时出现干扰
+                # 重要：清除地址栏的 code 参数，并锁定认证钥匙
                 st.query_params.clear()
+                st.query_params["auth_key"] = "authenticated_admin"
                 
                 time.sleep(0.5)
                 st.rerun()
