@@ -107,9 +107,38 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS system_config
                  (key TEXT PRIMARY KEY,
                   val TEXT)''')
+    
+    # 初始化密码 (如果数据库里没有，则从环境变量/Secrets 导入)
+    c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
+    if not c.fetchone() and app_pwd:
+        c.execute("INSERT INTO system_config (key, val) VALUES ('app_password', ?)", (str(app_pwd),))
 
     conn.commit()
     conn.close()
+
+def get_app_password():
+    """从数据库获取当前 6 位访问密码"""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
+            res = c.fetchone()
+            if res:
+                return res[0]
+    except:
+        pass
+    return app_pwd # 备选方案：返回环境变量里的值
+
+def update_app_password(new_pwd):
+    """更新数据库中的 6 位访问密码"""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (str(new_pwd),))
+            conn.commit()
+            return True
+    except:
+        return False
 
 def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
     if not client: return task_text, fallback_date, fallback_recur
@@ -570,7 +599,8 @@ try:
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd")
-                if pwd == app_pwd:
+                current_correct_pwd = get_app_password()
+                if pwd == current_correct_pwd:
                     st.session_state["authenticated"] = True
                     st.session_state["manual_logout"] = False # 登录成功，清除登出标记
                     # 设置持久化 Cookie (30天)
