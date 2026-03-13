@@ -10,7 +10,7 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import time
 
-VERSION = "2.3"
+VERSION = "2.4"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -96,13 +96,13 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
                 ⚠️ 极其重要严格指令：
                 1. CLEAN_TASK: 请从原始文本中**彻底移除**所有时间词汇（例如：“今晚6点”、“明天”、“下周二”、“后天中午”等）。
                 2. 严禁改动：除了删除时间词，绝对不允许修改、简化、润色、总结或翻译用户的任何其他文字。用户输入的长难句必须高保全。
-                3. DATE: 截止日期时间格式 'YYYY-MM-DD HH:MM'。
-                4. RECUR: 循环模式或 None。
+                3. DATE: 截止日期时间格式 'YYYY-MM-DD HH:MM'。若文本中未提到新的时间意图，请务必返回原始值：{f_date}。
+                4. RECUR: 循环模式(Monday, Everyday, Weekend, Monthly-15等)或 None。若文本中未提到新的循环意图，请务必返回原始值：{f_recur}。
                 
                 示例输入：“今晚6点去超市买菜，明天记得带伞”
                 期望输出：CLEAN_TASK: 去超市买菜，记得带伞 | DATE: {now.strftime('%Y-%m-%d')} 18:00 | RECUR: None
                 
-                请按照以下格式返回：CLEAN_TASK: 清理后的内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
+                请按照以下格式返回：CLEAN_TASK: 内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
                 {"role": "user", "content": task_text}
             ],
             temperature=0
