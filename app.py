@@ -615,7 +615,6 @@ try:
                     st.error("🚫 密码错误")
                 
                 # --- 🔑 Google 管理员登录路径 ---
-                st.markdown("<div style='text-align: center; margin: 20px 0; color: #9ca3af;'>─── 或管理员找回 ───</div>", unsafe_allow_html=True)
                 
                 # 简单实现：由于 streamlit 无法直接处理回调，我们直接构造 Google OAuth URL
                 # 这里的 redirect_uri 必须和您在控制台填的一模一样
@@ -628,7 +627,7 @@ try:
                     "state=family_admin_reset"
                 )
                 
-                st.link_button("🔑 使用 Gmail 快速登录 (管理员)", google_auth_url, use_container_width=True, help="忘记密码？用您的 Gmail 找回")
+                st.link_button("🔑 使用 Gmail 管理员登录", google_auth_url, use_container_width=True, help="忘记密码？用您的 Gmail 找回")
             
             # --- 🛡️ 捕捉 Google 回调逻辑 ---
             q_params = st.query_params
