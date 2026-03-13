@@ -970,7 +970,7 @@ try:
         st.session_state["manual_logout"] = True
 
     # Header Row
-    c_logout, c_title, c_sync = st.columns([0.12, 0.66, 0.22], vertical_alignment="center")
+    c_logout, c_title, c_sync = st.columns([0.12, 0.54, 0.34], vertical_alignment="center")
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
@@ -981,11 +981,11 @@ try:
             if msg_key in st.session_state:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
     with c_sync:
-        col_admin, col_manual = st.columns([0.3, 0.7])
+        col_admin, col_manual = st.columns([0.5, 0.5])
         with col_admin:
             # 只有通过 Gmail 登录的管理员才能看到盾牌图标
             if st.session_state.get("is_admin"):
-                with st.popover("🛡️", help="系统安全设置"):
+                with st.popover("� 修改密码", use_container_width=True, help="系统安全设置"):
                     st.markdown("### 🔐 访问管理")
                     curr_p = get_app_password()
                     st.write(f"当前 6 位访问密码: **{curr_p}**")
