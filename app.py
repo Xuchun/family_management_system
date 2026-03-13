@@ -559,13 +559,14 @@ try:
     # 1. 深度持久化验证 (Native + Session + Fallback)
     native_cookies = st.context.cookies
     if not st.session_state["authenticated"] and not st.session_state.get("manual_logout"):
+        # 优先从原生 Cookie 读
         current_token = native_cookies.get(AUTH_KEY)
         if current_token in ["authenticated", "authenticated_admin"]:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (current_token == "authenticated_admin")
-        elif current_token == "LOGGED_OUT":
-            pass
+            st.rerun() # 命中了持久化，强制刷新一次以载入主界面
         else:
+            # 备选方案：尝试从 Cookie 组件读
             mgr_val = cookie_manager.get(AUTH_KEY)
             if mgr_val in ["authenticated", "authenticated_admin"]:
                 st.session_state["authenticated"] = True
@@ -662,6 +663,9 @@ try:
                         if(window.parent) window.parent.document.cookie = c_str;
                     </script>
                 """, height=0)
+                
+                # 重要：清除地址栏的 code 参数，防止刷新时出现干扰
+                st.query_params.clear()
                 
                 time.sleep(0.5)
                 st.rerun()
