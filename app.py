@@ -13,7 +13,7 @@ import requests
 import time
 import threading
 
-VERSION = "3.4"
+VERSION = "3.5"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -795,7 +795,7 @@ try:
         st.session_state["logout_requested"] = True
 
     # Header Row
-    c_logout, c_title, c_empty = st.columns([0.15, 0.70, 0.15], vertical_alignment="center")
+    c_logout, c_title, c_sync = st.columns([0.15, 0.70, 0.15], vertical_alignment="center")
     with c_logout:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
@@ -805,8 +805,16 @@ try:
             msg_key = f"auto_backup_msg_{slot}"
             if msg_key in st.session_state:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
-    with c_empty:
-        pass
+    with c_sync:
+        if st.button("☁️ 云端同步", use_container_width=True, help="立即备份所有数据到云端", key="manual_sync_header"):
+            with st.spinner("同步中..."):
+                content = generate_master_report()
+                timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
+                success, msg = backup_to_gdrive(content, f"Manual_Full_Backup_{timestamp}.txt")
+                if success:
+                    st.toast(msg, icon="✅")
+                else:
+                    st.error(msg)
 
     st.markdown('<br>', unsafe_allow_html=True)
     top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
@@ -854,30 +862,23 @@ try:
                 st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
                 st.session_state["input_new_task"] = ""
 
-            col_add_input, col_add_btn, col_dl_btn, col_sync_btn = st.columns([0.50, 0.15, 0.17, 0.18], vertical_alignment="bottom")
+            col_add_input, col_add_btn, col_dl_btn = st.columns([0.60, 0.20, 0.20], vertical_alignment="bottom")
             with col_add_input:
                 st.text_input("➕ 新增事项:", placeholder="请输入需要添加的新事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
             with col_add_btn:
-                if st.button("立即添加新事项", use_container_width=True, on_click=handle_add_cb):
+                if st.button("添加新事项", use_container_width=True, on_click=handle_add_cb):
                     pass
             with col_dl_btn:
                 if not tasks_df.empty:
                     txt_content = generate_txt_report()
                     st.download_button(
-                        label="📥 本地下载",
+                        label="📥 下载事项清单",
                         data=txt_content,
                         file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                         mime="text/plain",
                         key="dl_btn_header_v1",
                         use_container_width=True
                     )
-            with col_sync_btn:
-                if st.button("☁️ 云端同步", use_container_width=True, help="备份到 Google Drive"):
-                    content = generate_txt_report()
-                    timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
-                    success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
-                    if success: st.toast(msg, icon="✅")
-                    else: st.error(msg)
 
             task_to_add = st.session_state.get("temp_task_text")
             if task_to_add:
