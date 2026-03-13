@@ -927,15 +927,38 @@ try:
             if msg_key in st.session_state:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
     with c_sync:
-        if st.button("☁️ 云端同步", use_container_width=True, help="立即备份所有数据到云端", key="manual_sync_header"):
-            with st.spinner("同步中..."):
-                content = generate_master_report()
-                timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
-                success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
-                if success:
-                    st.toast(msg, icon="✅")
-                else:
-                    st.error(msg)
+        col_admin, col_manual = st.columns([0.4, 0.6])
+        with col_admin:
+            # 只有通过 Gmail 登录的管理员才能看到盾牌图标
+            if st.session_state.get("is_admin"):
+                with st.popover("🛡️", help="系统安全设置"):
+                    st.markdown("### 🔐 访问管理")
+                    curr_p = get_app_password()
+                    st.write(f"当前 6 位访问密码: **{curr_p}**")
+                    new_p = st.text_input("设置新密码 (6位数字):", type="password", max_chars=6)
+                    if st.button("更新密码", use_container_width=True):
+                        if len(new_p) == 6 and new_p.isdigit():
+                            if update_app_password(new_p):
+                                st.success("密码已更新！")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("保存失败")
+                        else:
+                            st.warning("请输入6位数字")
+            else:
+                st.empty() # 非管理员不显示
+        
+        with col_manual:
+            if st.button("☁️ 云端同步", use_container_width=True, help="立即备份所有数据到云端", key="manual_sync_header"):
+                with st.spinner("同步中..."):
+                    content = generate_master_report()
+                    timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
+                    success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
+                    if success:
+                        st.toast(msg, icon="✅")
+                    else:
+                        st.error(msg)
 
     st.markdown('<br>', unsafe_allow_html=True)
     top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
