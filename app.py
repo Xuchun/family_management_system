@@ -560,15 +560,15 @@ try:
     native_cookies = st.context.cookies
     
     def resolve_token():
-        # 1. 优先尝试从原生请求头提取 (最快)
+        # A. 极致优先：从浏览器原生请求头读取 (最抗刷新)
         token = native_cookies.get(AUTH_KEY)
         if token in ["authenticated", "authenticated_admin"]:
             return token
-        # 2. 尝试从 CookieManager 组件提取
+        # B. 次要方案：从组件读取 (用于冷启动同步)
         try:
-            token = cookie_manager.get(AUTH_KEY)
-            if token in ["authenticated", "authenticated_admin"]:
-                return token
+            val = cookie_manager.get(AUTH_KEY)
+            if val in ["authenticated", "authenticated_admin"]:
+                return val
         except:
             pass
         return None
@@ -584,11 +584,11 @@ try:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
             st.rerun()
-        elif st.session_state["auth_retry_count"] < 5:
-            # 给浏览器一点时间冷启动组件 (重要：不显示登录框，只显示加载)
+        elif st.session_state["auth_retry_count"] < 10: # 延长回暖期到 5-10 秒，应对极慢网络
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown("<div style='text-align:center; margin-top:100px;'><h2 style='color:#1e3a8a;'>🛡️ 正在验证访问权限...</h2><p style='color:#9ca3af;'>请稍候，系统正在为您自动登录</p></div>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全连接中，请稍候...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
 
@@ -628,11 +628,11 @@ try:
                     exp_date = datetime.now() + timedelta(days=30)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
                     
-                    # 强力锁定：使用原生 JS 设置 (关键：跨域嵌套环境需 SameSite=None; Secure)
+                    # 强力锁定：使用原生 JS 设置 (关键：现代浏览器跨域环境必须包含 Partitioned; 且 SameSite=None; Secure)
                     exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
                     components.html(f"""
                         <script>
-                            var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=None; Secure';
+                            var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
                             document.cookie = c_str;
                             if(window.parent) window.parent.document.cookie = c_str;
                         </script>
@@ -673,11 +673,11 @@ try:
                 exp_date = datetime.now() + timedelta(days=30)
                 cookie_manager.set(AUTH_KEY, "authenticated_admin", expires_at=exp_date, path="/")
                 
-                # 强力锁定：使用原生 JS 设置
+                # 强力锁定：使用原生 JS 设置 (分区 Cookie 锁定)
                 exp_utc = exp_date.strftime("%a, %d %b %Y %H:%M:%S GMT")
                 components.html(f"""
                     <script>
-                        var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=None; Secure';
+                        var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
                         document.cookie = c_str;
                         if(window.parent) window.parent.document.cookie = c_str;
                     </script>
