@@ -298,35 +298,69 @@ def generate_master_report():
         f"{'='*50}\n\n"
     ]
     
-    # 1. 任务数据 (按用户要求分类)
+    # 1. 任务数据 (高详分类备份)
     full_lines.append("【 📝 家庭事项清单 】\n")
     try:
+        from datetime import timedelta
         df = get_tasks()
         if not df.empty:
-            # 待办事项 (未完成 且 非循环)
-            pending = df[(df['completed'] == 0) & ((df['recurring_pattern'].isna()) | (df['recurring_pattern'] == ""))]
-            full_lines.append("--- 待办事项 ---\n")
-            if not pending.empty:
-                for _, r in pending.iterrows():
-                    due = r['due_date'][:16] if r['due_date'] else "未设置"
-                    full_lines.append(f"[ ] {r['task']} (截止: {due})\n")
-            else:
-                full_lines.append("无\n")
+            now_dt = get_now_sgt()
+            today_date = now_dt.date()
+            tomorrow_date = today_date + timedelta(days=1)
+            end_of_week = today_date + timedelta(days=6 - today_date.weekday())
+            next_month = today_date.replace(day=28) + timedelta(days=4)
+            end_of_month = next_month - timedelta(days=next_month.day)
 
-            # 循环事项 (非完成 且 有循环模式)
+            # 提取所有未完成且非循环的任务
+            pending_all = df[(df['completed'] == 0) & ((df['recurring_pattern'].isna()) | (df['recurring_pattern'] == ""))]
+            
+            # 分类逻辑
+            overdue, today, tomorrow, week, later = [], [], [], [], []
+            for _, r in pending_all.iterrows():
+                if not r['due_date']:
+                    today.append(r)
+                    continue
+                try:
+                    due_dt = datetime.strptime(r['due_date'], "%Y-%m-%d %H:%M").date()
+                    if due_dt < today_date: overdue.append(r)
+                    elif due_dt == today_date: today.append(r)
+                    elif due_dt == tomorrow_date: tomorrow.append(r)
+                    elif due_dt <= end_of_week: week.append(r)
+                    elif due_dt <= end_of_month: later.append(r)
+                    else: later.append(r) # 超过一月的也暂时放入
+                except:
+                    today.append(r)
+
+            def add_sub_section(title, items, icon="[ ]"):
+                full_lines.append(f"--- {title} ---\n")
+                if items:
+                    for r in items:
+                        due_str = f" (截止: {r['due_date'][:16]})" if r['due_date'] else ""
+                        full_lines.append(f"{icon} {r['task']}{due_str}\n")
+                else:
+                    full_lines.append("无\n")
+                full_lines.append("\n")
+
+            add_sub_section("🔴 未完成事项", overdue, "[!]")
+            add_sub_section("⚡ 今日急需处理", today, "[ ]")
+            add_sub_section("🌙 明日事项", tomorrow, "[ ]")
+            add_sub_section("🗓️ 本周剩余事项", week, "[ ]")
+            add_sub_section("⏳ 本月剩余事项", later, "[ ]")
+
+            # 循环事项
             recurring = df[(df['completed'] == 0) & (df['recurring_pattern'].notna()) & (df['recurring_pattern'] != "")]
-            full_lines.append("\n--- 循环事项 ---\n")
+            full_lines.append("--- 🔄 循环事项 ---\n")
             if not recurring.empty:
                 for _, r in recurring.iterrows():
                     full_lines.append(f"[∞] {r['task']} (模式: {r['recurring_pattern']})\n")
             else:
                 full_lines.append("无\n")
+            full_lines.append("\n")
 
             # 已完成事项
             done = df[df['completed'] == 1]
-            full_lines.append("\n--- 已完成事项 ---\n")
+            full_lines.append("--- ✅ 已完成事项 (最近50条) ---\n")
             if not done.empty:
-                # 只取最近完成的 50 条，防止备份文件过大
                 done_sorted = done.sort_values(by='created_at', ascending=False).head(50)
                 for _, r in done_sorted.iterrows():
                     full_lines.append(f"[√] {r['task']}\n")
@@ -335,7 +369,7 @@ def generate_master_report():
         else:
             full_lines.append("尚无任务数据。\n")
     except Exception as e:
-        full_lines.append(f"任务提取失败: {e}\n")
+        full_lines.append(f"任务分类备份失败: {e}\n")
     
     # 2. 恩雅的健康 - 身高体重
     full_lines.append("\n【 📏 恩雅的身高体重记录 】\n")
