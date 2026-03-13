@@ -595,7 +595,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭管理系统</h2>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
