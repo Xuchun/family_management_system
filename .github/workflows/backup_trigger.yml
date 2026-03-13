@@ -1,0 +1,18 @@
+name: Cloud Backup Trigger
+
+on:
+  schedule:
+    # 凌晨 1 点 SGT (17:00 UTC)
+    - cron: '0 17 * * *'
+    # 中午 12 点 SGT (04:00 UTC)
+    - cron: '0 4 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up and Trigger Backup
+        run: |
+          curl -I https://familymanagementsystem-62a6cbu5jurgnvzngezutj.streamlit.app/
+          echo "Ping sent to wake up Streamlit Cloud. Backup should trigger now."

@@ -10,8 +10,10 @@ import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 import json
 import requests
+import time
+import threading
 
-VERSION = "3.2"
+VERSION = "3.4"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -47,7 +49,10 @@ DB_FILE = "data/tasks.db"
 
 # --- 4. Google Drive Backup Engine (via Apps Script Bridge) ---
 def backup_to_gdrive(content_str, filename):
-    if not g_script_url:
+    # 清理 URL (防止 .env 里的引号或空格干扰)
+    url = g_script_url.strip("'\" ") if g_script_url else None
+    
+    if not url:
         return False, "⚠️ 未检测到 Google 备份 URL。"
     
     try:
@@ -55,12 +60,18 @@ def backup_to_gdrive(content_str, filename):
             "filename": filename,
             "content": content_str
         }
-        response = requests.post(g_script_url, json=payload, timeout=30)
+        # Google Script 会进行 302 重定向，requests 默认会自动跟随
+        response = requests.post(url, json=payload, timeout=30, allow_redirects=True)
         
-        if response.status_code == 200 and "Success" in response.text:
-            return True, "✅ 云端备份成功！"
+        if response.status_code == 200:
+            if "Success" in response.text:
+                return True, "✅ 云端备份成功！"
+            else:
+                return False, f"❌ 脚本返回错误: {response.text[:200]}"
+        elif response.status_code == 404:
+            return False, "❌ 备选失败: 404 (脚本 URL 无效或未发布)。请检查 URL 是否完全正确。"
         else:
-            return False, f"❌ 备份失败: {response.text}"
+            return False, f"❌ 备份失败: HTTP {response.status_code}"
     except Exception as e:
         return False, f"❌ 网络请求错误: {str(e)}"
 
@@ -92,12 +103,10 @@ def init_db():
                   weight REAL,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
                   
-    # 月经记录表
-    c.execute('''CREATE TABLE IF NOT EXISTS enya_period
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  record_date TEXT NOT NULL,
-                  event_type TEXT NOT NULL,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    # 系统设置表 (用于记录最后备份时间等)
+    c.execute('''CREATE TABLE IF NOT EXISTS system_config
+                 (key TEXT PRIMARY KEY,
+                  val TEXT)''')
 
     conn.commit()
     conn.close()
@@ -279,6 +288,124 @@ def delete_enya_period(period_id):
     conn.commit()
     conn.close()
 
+# --- 5. Integrated Master Report & Auto-Backup Logic ---
+def generate_master_report():
+    """聚合所有模块数据生成完整报告"""
+    now_sgt = get_now_sgt()
+    full_lines = [
+        f"🏠 家庭管理系统 - 完整全量备份报告\n",
+        f"生成时间: {now_sgt.strftime('%Y-%m-%d %H:%M:%S')}\n",
+        f"{'='*50}\n\n"
+    ]
+    
+    # 1. 任务数据 (借用现有的 generate_txt_report 逻辑，但这里我们直接构建内容)
+    full_lines.append("【 📝 家庭事项清单 】\n")
+    try:
+        df = get_tasks()
+        if not df.empty:
+            for _, r in df.iterrows():
+                status = "[√]" if r['completed'] else "[ ]"
+                due = r['due_date'][:16] if r['due_date'] else "未设置"
+                full_lines.append(f"{status} {r['task']} (截止: {due})\n")
+        else:
+            full_lines.append("尚无任务。\n")
+    except Exception as e:
+        full_lines.append(f"任务提取失败: {e}\n")
+    
+    # 2. 恩雅的健康 - 身高体重
+    full_lines.append("\n【 📏 恩雅的身高体重记录 】\n")
+    try:
+        v_df = get_enya_vitals()
+        if not v_df.empty:
+            for _, r in v_df.iterrows():
+                full_lines.append(f"{r['record_date']}: 身高 {r['height']}cm | 体重 {r['weight']}kg\n")
+        else:
+            full_lines.append("尚无记录。\n")
+    except Exception as e:
+        full_lines.append(f"健康数据提取失败: {e}\n")
+
+    # 3. 恩雅的健康 - 经期
+    full_lines.append("\n【 📅 恩雅的经期记录 】\n")
+    try:
+        p_df = get_enya_periods()
+        if not p_df.empty:
+            for _, r in p_df.iterrows():
+                full_lines.append(f"{r['record_date']}: {r['event_type']}\n")
+        else:
+            full_lines.append("尚无记录。\n")
+    except Exception as e:
+        full_lines.append(f"经期记录提取失败: {e}\n")
+
+    full_lines.append(f"\n\n{'='*50}\n备份结束")
+    return "".join(full_lines)
+
+def run_auto_backup_logic(silent=True):
+    """
+    检查是否需要自动备份 (中午 12 点和凌晨 1 点)
+    现在支持：Lazy Trigger (用户访问) 和 Background Daemon (自动执行)
+    """
+    try:
+        now = get_now_sgt()
+        current_date = now.strftime("%Y-%m-%d")
+        current_hour = now.hour
+        
+        target_slot = None
+        if current_hour == 1:
+            target_slot = "01am"
+        elif current_hour == 12:
+            target_slot = "12pm"
+        
+        if target_slot:
+            slot_key = f"last_auto_backup_{target_slot}"
+            
+            # 独立连接数据库，确保线程安全
+            with sqlite3.connect(DB_FILE) as conn:
+                c = conn.cursor()
+                c.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, val TEXT)")
+                c.execute("SELECT val FROM system_config WHERE key = ?", (slot_key,))
+                res = c.fetchone()
+                last_date = res[0] if res else ""
+                
+                if last_date != current_date:
+                    content = generate_master_report()
+                    filename = f"Autonomous_Backup_{target_slot}_{current_date}.txt"
+                    success, msg = backup_to_gdrive(content, filename)
+                    
+                    if success:
+                        c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
+                        conn.commit()
+                        if not silent:
+                            st.session_state[f"auto_backup_msg_{target_slot}"] = f"系统已自动完成 {target_slot} 云端同步。"
+    except Exception as e:
+        if not silent:
+            print(f"自动备份后台错误: {e}")
+
+def autonomous_backup_daemon():
+    """后台永驻守护线程：每 30 秒巡检一次时间"""
+    # 稍微延迟启动，等待主进程稳定
+    time.sleep(10)
+    while True:
+        try:
+            now = get_now_sgt()
+            # 只有在整点的分钟内才尝试触发
+            if (now.hour == 1 or now.hour == 12) and now.minute == 0:
+                run_auto_backup_logic(silent=True)
+                time.sleep(61) # 跨过这一分钟
+            else:
+                time.sleep(30)
+        except:
+            time.sleep(60)
+
+# --- 🎯 线程启动器 (确保全域唯一) ---
+import threading
+if "daemon_started" not in st.session_state:
+    # 在有些环境下 session_state 会重置，我们通过 Python 全局变量做二次锁定
+    if not any(t.name == "FamilyBackupDaemon" for t in threading.enumerate()):
+        daemon = threading.Thread(target=autonomous_backup_daemon, name="FamilyBackupDaemon", daemon=True)
+        daemon.start()
+        st.session_state["daemon_started"] = True
+
+
 # --- 5. UI Styling ---
 st.markdown("""
 <style>
@@ -330,6 +457,8 @@ st.markdown("""
 # --- 6. Main App Structure ---
 try:
     init_db()
+    # 执行自动备份逻辑 (Lazy Load + Daemon 状态同步)
+    run_auto_backup_logic(silent=False)
 
     # --- 🔐 登录逻辑与持久化验证 ---
     # 定义全局唯一认证键名
@@ -671,6 +800,11 @@ try:
         st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+        # 如果刚才触发了自动备份，给予一个小提示
+        for slot in ["01am", "12pm"]:
+            msg_key = f"auto_backup_msg_{slot}"
+            if msg_key in st.session_state:
+                st.toast(st.session_state.pop(msg_key), icon="🤖")
     with c_empty:
         pass
 
