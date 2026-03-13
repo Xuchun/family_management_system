@@ -561,31 +561,28 @@ try:
     q_params = st.query_params
     
     def resolve_token():
-        # 1. 探测所有来源的原始信号
-        c_native = native_cookies.get(AUTH_KEY)
+        # 1. 优先级 0：黑名单 (注销标记)
+        c_val = native_cookies.get(AUTH_KEY)
+        if c_val == "LOGGED_OUT":
+            return None
+            
+        # 探测组件 Cookie
         c_comp = None
         try: c_comp = cookie_manager.get(AUTH_KEY)
         except: pass
-        url_token = q_params.get("auth_key")
-        
-        # 2. 核心防线：黑名单检查 (注销锁定)
-        # 只要任意一个 Cookie 说我们刚注销过，就绝对不进主页面，即便 URL 里有钥匙也不行
-        if c_native == "LOGGED_OUT" or c_comp == "LOGGED_OUT":
+        if c_comp == "LOGGED_OUT":
             return None
-            
-        # 3. 检查白名单通行证
-        # 如果 URL 有钥匙，我们需要极其谨慎：
-        # 只有当 Cookie 状态已经加载完成 (不是 None) 且证明没有 LOGGED_OUT 时，才信任 URL
+
+        # 2. 优先级 1：URL 令牌 (仅用于“刚登录”或“刚刷新”的握手瞬间)
+        url_token = q_params.get("auth_key")
         if url_token in ["authenticated", "authenticated_admin"]:
-            # 如果 Native Cookie 还没读到 (None)，我们等一等 (由 auth_retry_count 驱动)
-            if c_native is not None or st.session_state.get("auth_retry_count", 0) > 1:
-                return url_token
+            return url_token
         
-        # 其次信任 Native Cookie
-        if c_native in ["authenticated", "authenticated_admin"]:
-            return c_native
+        # 3. 优先级 2：浏览器原生持久化
+        if c_val in ["authenticated", "authenticated_admin"]:
+            return c_val
             
-        # 最后信任组件 Cookie
+        # 4. 优先级 3：组件持久化
         if c_comp in ["authenticated", "authenticated_admin"]:
             return c_comp
             
@@ -601,10 +598,11 @@ try:
         if found_token:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
-            # 同步回 URL，确保刷新不丢
-            st.query_params["auth_key"] = found_token
+            # 💡 关键：阅后即焚！一旦识别成功，立即从 URL 抹掉，防止注销后刷新复燃
+            if "auth_key" in st.query_params:
+                st.query_params.clear() 
             st.rerun()
-        elif st.session_state["auth_retry_count"] < 8: # 稍微缩短重试，因为 URL 识别是非常快的
+        elif st.session_state["auth_retry_count"] < 8:
             st.session_state["auth_retry_count"] += 1
             with st.container():
                 st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
@@ -614,27 +612,32 @@ try:
 
     # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
-        # A. Python 层面彻底清理
-        st.query_params.clear() # 抹掉 URL 钥匙 (Streamlit 原生方式)
+        # 安全断开逻辑：先清后端，再发指令清前端
         st.session_state["authenticated"] = False
         st.session_state["is_admin"] = False
         st.session_state["logout_requested"] = False
         st.session_state["manual_logout"] = True
-        
-        # B. 持久化层面设置禁止进入标记 (1 天内有效即可)
+        st.query_params.clear() # 关键：物理删除 URL 钥匙
+
+        # 设置注销 Cookie (持久化 1 天)
         cookie_manager.set(AUTH_KEY, "LOGGED_OUT", expires_at=datetime.now() + timedelta(days=1), path="/")
         
-        # C. 强力清理脚本 (设置分区 Cookie)
+        # 执行强力 JS 清理并重定向到干净首页
         components.html(f"""
             <script>
                 var c_str = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=86400; SameSite=None; Secure; Partitioned';
                 document.cookie = c_str;
                 if(window.parent) window.parent.document.cookie = c_str;
+                
+                // 强制父级窗口也刷新到不带任何参数的 URL
+                var home = window.location.origin + window.location.pathname;
+                if(window.parent) window.parent.location.href = home;
+                else window.location.href = home;
             </script>
         """, height=0)
         
-        time.sleep(0.5)
-        st.rerun() # 触发一次完整重载，将清理后的 URL 同步到浏览器界面
+        time.sleep(0.3)
+        st.stop() # 绝对阻断后续任何内容的渲染
 
     # 3. 渲染登录界面 (仅在仍未通过验证时)
     login_placeholder = st.empty()
