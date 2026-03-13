@@ -13,7 +13,7 @@ import requests
 import time
 import threading
 
-VERSION = "3.5"
+VERSION = "3.6"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
