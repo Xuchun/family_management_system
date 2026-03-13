@@ -298,17 +298,42 @@ def generate_master_report():
         f"{'='*50}\n\n"
     ]
     
-    # 1. 任务数据 (借用现有的 generate_txt_report 逻辑，但这里我们直接构建内容)
+    # 1. 任务数据 (按用户要求分类)
     full_lines.append("【 📝 家庭事项清单 】\n")
     try:
         df = get_tasks()
         if not df.empty:
-            for _, r in df.iterrows():
-                status = "[√]" if r['completed'] else "[ ]"
-                due = r['due_date'][:16] if r['due_date'] else "未设置"
-                full_lines.append(f"{status} {r['task']} (截止: {due})\n")
+            # 待办事项 (未完成 且 非循环)
+            pending = df[(df['completed'] == 0) & ((df['recurring_pattern'].isna()) | (df['recurring_pattern'] == ""))]
+            full_lines.append("--- 待办事项 ---\n")
+            if not pending.empty:
+                for _, r in pending.iterrows():
+                    due = r['due_date'][:16] if r['due_date'] else "未设置"
+                    full_lines.append(f"[ ] {r['task']} (截止: {due})\n")
+            else:
+                full_lines.append("无\n")
+
+            # 循环事项 (非完成 且 有循环模式)
+            recurring = df[(df['completed'] == 0) & (df['recurring_pattern'].notna()) & (df['recurring_pattern'] != "")]
+            full_lines.append("\n--- 循环事项 ---\n")
+            if not recurring.empty:
+                for _, r in recurring.iterrows():
+                    full_lines.append(f"[∞] {r['task']} (模式: {r['recurring_pattern']})\n")
+            else:
+                full_lines.append("无\n")
+
+            # 已完成事项
+            done = df[df['completed'] == 1]
+            full_lines.append("\n--- 已完成事项 ---\n")
+            if not done.empty:
+                # 只取最近完成的 50 条，防止备份文件过大
+                done_sorted = done.sort_values(by='created_at', ascending=False).head(50)
+                for _, r in done_sorted.iterrows():
+                    full_lines.append(f"[√] {r['task']}\n")
+            else:
+                full_lines.append("无\n")
         else:
-            full_lines.append("尚无任务。\n")
+            full_lines.append("尚无任务数据。\n")
     except Exception as e:
         full_lines.append(f"任务提取失败: {e}\n")
     
