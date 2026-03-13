@@ -12,8 +12,19 @@ import json
 import requests
 import time
 import threading
+import hashlib
 
-VERSION = "3.7"
+VERSION = "3.9"
+ADMIN_EMAIL = "xuchunli@gmail.com"
+
+def hash_password(password):
+    """使用 SHA256 为 6 位密码加盐哈希，提高银行级安全性"""
+    salt = "family_mgmt_salt_2026"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+def verify_password(password, hashed):
+    """校验输入的密码与数据库中的哈希是否匹配"""
+    return hash_password(password) == hashed
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -32,10 +43,14 @@ try:
     api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
     app_pwd = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else os.getenv("APP_PASSWORD")
     g_script_url = st.secrets["GOOGLE_BACKUP_URL"] if "GOOGLE_BACKUP_URL" in st.secrets else os.getenv("GOOGLE_BACKUP_URL")
+    g_client_id = st.secrets["GOOGLE_CLIENT_ID"] if "GOOGLE_CLIENT_ID" in st.secrets else os.getenv("GOOGLE_CLIENT_ID")
+    g_client_secret = st.secrets["GOOGLE_CLIENT_SECRET"] if "GOOGLE_CLIENT_SECRET" in st.secrets else os.getenv("GOOGLE_CLIENT_SECRET")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
     app_pwd = os.getenv("APP_PASSWORD")
     g_script_url = os.getenv("GOOGLE_BACKUP_URL")
+    g_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
 
 client = OpenAI(api_key=api_key) if api_key else None
 SGT = pytz.timezone('Asia/Singapore')
@@ -108,10 +123,11 @@ def init_db():
                  (key TEXT PRIMARY KEY,
                   val TEXT)''')
     
-    # 初始化密码 (如果数据库里没有，则从环境变量/Secrets 导入)
+    # 初始化密码 (如果数据库里没有，则从环境变量/Secrets 导入并进行哈希处理)
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
-        c.execute("INSERT INTO system_config (key, val) VALUES ('app_password', ?)", (str(app_pwd),))
+        hashed_init = hash_password(str(app_pwd))
+        c.execute("INSERT INTO system_config (key, val) VALUES ('app_password', ?)", (hashed_init,))
 
     conn.commit()
     conn.close()
@@ -130,11 +146,12 @@ def get_app_password():
     return app_pwd # 备选方案：返回环境变量里的值
 
 def update_app_password(new_pwd):
-    """更新数据库中的 6 位访问密码"""
+    """更新数据库中的密码（以哈希形式存储，杜绝明文）"""
     try:
+        hashed = hash_password(str(new_pwd))
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
-            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (str(new_pwd),))
+            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (hashed,))
             conn.commit()
             return True
     except:
@@ -648,9 +665,10 @@ try:
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
                 pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd")
-                current_correct_pwd = get_app_password()
+                current_hashed_pwd = get_app_password()
                 
-                if pwd == current_correct_pwd:
+                # 银行级验证：比对哈希
+                if pwd and verify_password(pwd, current_hashed_pwd):
                     st.session_state["authenticated"] = True
                     st.session_state["manual_logout"] = False
                     st.session_state["is_admin"] = False
@@ -693,15 +711,47 @@ try:
             # --- 🛡️ 捕捉 Google 回调逻辑 ---
             q_params = st.query_params
             if "code" in q_params and q_params.get("state") == "family_admin_reset":
-                # 🛡️ 安全加固：管理员身份二次确认
-                st.toast("🔍 正在与 Google 握手，验证管理员身份...", icon="🛡️")
-                time.sleep(1) # 模拟深层验证时间
+                # 🛡️ 银行级安全加固：真正的 Token 校验与邮箱白名单过滤
+                code = q_params.get("code")
+                redirect_uri = "https://familymanagementsystem-62a6cbu5jurgnvzngezutj.streamlit.app/"
                 
-                # 在此可以进一步验证 Google 返回的 id_token，确保 email == xuchunli@gmail.com
-                # 目前通过 OAuth 产生的临时 Code 进行信任判定
-                st.session_state["authenticated"] = True
-                st.session_state["is_admin"] = True
-                st.session_state["manual_logout"] = False
+                st.toast("�️ 正在与 Google 交换加密令牌...", icon="�")
+                
+                try:
+                    # 1. 交换 Access Token
+                    token_url = "https://oauth2.googleapis.com/token"
+                    data = {
+                        "code": code,
+                        "client_id": g_client_id,
+                        "client_secret": g_client_secret,
+                        "redirect_uri": redirect_uri,
+                        "grant_type": "authorization_code"
+                    }
+                    token_res = requests.post(token_url, data=data).json()
+                    access_token = token_res.get("access_token")
+                    
+                    if access_token:
+                        # 2. 获取用户信息
+                        user_info_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", 
+                                                   headers={"Authorization": f"Bearer {access_token}"}).json()
+                        user_email = user_info_res.get("email")
+                        
+                        # 3. 银行级白名单检查：只有管理员本人才能进入
+                        if user_email == ADMIN_EMAIL:
+                            st.session_state["authenticated"] = True
+                            st.session_state["is_admin"] = True
+                            st.session_state["manual_logout"] = False
+                            st.success(f"✅ 管理员 {user_email} 验证通过")
+                        else:
+                            st.error(f"🚫 访问拒绝：{user_email} 并不在管理员白名单中。")
+                            time.sleep(3)
+                            st.stop()
+                    else:
+                        st.error("❌ 令牌交换失败，请重试登录。")
+                        st.stop()
+                except Exception as e:
+                    st.error(f"⚠️ 安全验证出错: {str(e)}")
+                    st.stop()
                 
                 # 设置管理员持久化 Cookie
                 exp_date = datetime.now() + timedelta(days=30)
