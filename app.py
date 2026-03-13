@@ -530,12 +530,16 @@ try:
     # 1. 深度持久化验证 (Native + Session + Fallback)
     native_cookies = st.context.cookies
     # 增加 manual_logout 阻断位，防止登出后瞬间被 Cookie 重新登录
+    # 且只有当 Cookie 值严格等于 'authenticated' 时才允许自动登录
     if not st.session_state["authenticated"] and not st.session_state.get("manual_logout"):
-        # 强制检查原生 Cookie (最快)
-        if native_cookies.get(AUTH_KEY) == "authenticated":
+        current_token = native_cookies.get(AUTH_KEY)
+        if current_token == "authenticated":
             st.session_state["authenticated"] = True
+        elif current_token == "LOGGED_OUT":
+            # 明确已登出，不做任何动作
+            pass
         else:
-            # 尝试通过组件二次确认 (稍慢但可作为备选)
+            # 尝试通过组件二次确认 (支持旧版逻辑兼容)
             mgr_val = cookie_manager.get(AUTH_KEY)
             if mgr_val == "authenticated":
                 st.session_state["authenticated"] = True
@@ -543,17 +547,19 @@ try:
 
     # 2. 处理登出请求
     if st.session_state.get("logout_requested"):
-        # 写入清除指令
-        cookie_manager.set(AUTH_KEY, "", expires_at=datetime.now() - timedelta(days=365), path="/")
+        # 写入明确的“已登出”指令 (不再仅仅是清空)
+        cookie_manager.set(AUTH_KEY, "LOGGED_OUT", expires_at=datetime.now() + timedelta(days=30), path="/")
         st.session_state["authenticated"] = False
         st.session_state["logout_requested"] = False
-        # JS 双重清理
+        st.session_state["manual_logout"] = True
+        # JS 强力清理
         components.html(f"""
             <script>
-                document.cookie = '{AUTH_KEY}=; expires=Sun, 01 Jan 2023 00:00:00 UTC; path=/;';
-                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=; expires=Sun, 01 Jan 2023 00:00:00 UTC; path=/;';
+                document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000;';
+                if(window.parent) window.parent.document.cookie = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=2592000;';
             </script>
         """, height=0)
+        time.sleep(0.5) # 给浏览器和网络一点时间记录注销指令
         st.rerun()
 
     # 3. 渲染登录界面 (仅在仍未通过验证时)
