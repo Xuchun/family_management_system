@@ -595,11 +595,11 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🔒 访问受限</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-top: 50px;'>🏠 家庭管理系统</h2>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
-                pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd", help="家庭成员通用密码")
+                pwd = st.text_input("请输入 6 位访问密码:", type="password", key="login_pwd")
                 current_correct_pwd = get_app_password()
                 
                 if pwd == current_correct_pwd:
@@ -627,7 +627,7 @@ try:
                     "state=family_admin_reset"
                 )
                 
-                st.link_button("🔑 使用 Gmail 管理员登录", google_auth_url, use_container_width=True, help="忘记密码？用您的 Gmail 找回")
+                st.link_button("🔑 使用 Gmail 管理员登录", google_auth_url, use_container_width=True)
             
             # --- 🛡️ 捕捉 Google 回调逻辑 ---
             q_params = st.query_params
