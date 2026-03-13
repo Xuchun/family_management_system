@@ -8,9 +8,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
-import time
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaInMemoryUpload
 
-VERSION = "2.4"
+VERSION = "3.0"
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -28,9 +31,13 @@ load_dotenv()
 try:
     api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
     app_pwd = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else os.getenv("APP_PASSWORD")
+    g_service_json = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"] if "GOOGLE_SERVICE_ACCOUNT_JSON" in st.secrets else os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    g_folder_id = st.secrets["GOOGLE_DRIVE_FOLDER_ID"] if "GOOGLE_DRIVE_FOLDER_ID" in st.secrets else os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
     app_pwd = os.getenv("APP_PASSWORD")
+    g_service_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    g_folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 
 client = OpenAI(api_key=api_key) if api_key else None
 SGT = pytz.timezone('Asia/Singapore')
@@ -41,6 +48,32 @@ def get_now_sgt():
 if not os.path.exists("data"):
     os.makedirs("data")
 DB_FILE = "data/tasks.db"
+
+# --- 4. Google Drive Backup Engine ---
+def backup_to_gdrive(content_str, filename):
+    if not g_service_json or not g_folder_id:
+        return False, "⚠️ 未检测到 Google Drive 配置凭证。"
+    
+    try:
+        # 转换 JSON 字符串为凭据对象
+        service_info = json.loads(g_service_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_info, 
+            scopes=['https://www.googleapis.com/auth/drive.file']
+        )
+        service = build('drive', 'v3', credentials=credentials)
+        
+        file_metadata = {
+            'name': filename,
+            'parents': [g_folder_id]
+        }
+        media = MediaInMemoryUpload(content_str.encode('utf-8'), mimetype='text/plain')
+        
+        # 上传文件
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return True, f"✅ 备份成功！文件 ID: {file.get('id')}"
+    except Exception as e:
+        return False, f"❌ 备份失败: {str(e)}"
 
 # --- 4. Database Functions ---
 def init_db():
@@ -698,7 +731,7 @@ try:
                 st.session_state["temp_task_text"] = st.session_state.get("input_new_task", "")
                 st.session_state["input_new_task"] = ""
 
-            col_add_input, col_add_btn, col_dl_btn = st.columns([0.65, 0.15, 0.20], vertical_alignment="bottom")
+            col_add_input, col_add_btn, col_dl_btn, col_sync_btn = st.columns([0.50, 0.15, 0.17, 0.18], vertical_alignment="bottom")
             with col_add_input:
                 st.text_input("➕ 新增事项:", placeholder="请输入需要添加的新事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
             with col_add_btn:
@@ -708,13 +741,20 @@ try:
                 if not tasks_df.empty:
                     txt_content = generate_txt_report()
                     st.download_button(
-                        label="下载待办事项清单",
+                        label="📥 本地下载",
                         data=txt_content,
                         file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                         mime="text/plain",
                         key="dl_btn_header_v1",
                         use_container_width=True
                     )
+            with col_sync_btn:
+                if st.button("☁️ 云端同步", use_container_width=True, help="备份到 Google Drive"):
+                    content = generate_txt_report()
+                    timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
+                    success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
+                    if success: st.toast(msg, icon="✅")
+                    else: st.error(msg)
 
             task_to_add = st.session_state.get("temp_task_text")
             if task_to_add:
