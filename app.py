@@ -715,7 +715,7 @@ try:
                 code = q_params.get("code")
                 redirect_uri = "https://familymanagementsystem-62a6cbu5jurgnvzngezutj.streamlit.app/"
                 
-                st.toast("�️ 正在与 Google 交换加密令牌...", icon="�")
+                st.toast("🔍 正在与 Google 交换加密令牌...", icon="🔄")
                 
                 try:
                     # 1. 交换 Access Token
@@ -1060,7 +1060,7 @@ try:
         with col_admin:
             # 只有通过 Gmail 登录的管理员才能看到盾牌图标
             if st.session_state.get("is_admin"):
-                with st.popover("� 修改密码", use_container_width=True, help="系统安全设置"):
+                with st.popover("🔐 修改密码", use_container_width=True, help="系统安全设置"):
                     st.markdown("### 🔐 访问管理")
                     curr_p = get_app_password()
                     st.write(f"当前 6 位访问密码: **{curr_p}**")
