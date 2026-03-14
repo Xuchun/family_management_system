@@ -942,8 +942,8 @@ try:
                         unmark_recurring_date_completed(row['id'], date_only)
                     st.rerun()
                 
-            # Handle inline edit
-            if st.session_state.get("editing_task_id") == row['id']:
+            # Handle inline edit (Only for non-shadow master tasks)
+            if not is_shadow and st.session_state.get("editing_task_id") == row['id']:
                 new_text = c2.text_input("修改事项:", value=row['task'], key=f"inp_{location}_{row['id']}")
                 save_col, can_col = c3.columns(2)
                 if save_col.button("💾", key=f"save_{location}_{row['id']}", help="保存"):
