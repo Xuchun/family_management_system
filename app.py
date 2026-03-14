@@ -15,7 +15,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "5.0"
+VERSION = "5.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -658,30 +658,31 @@ try:
     q_params = st.query_params
     
     def resolve_token():
-        # 1. 优先级 0：黑名单 (注销标记)
+        # 获取各种可能的来源
         c_val = native_cookies.get(AUTH_KEY)
-        if c_val == "LOGGED_OUT":
-            return None
-            
-        # 探测组件 Cookie
+        
         c_comp = None
         try: c_comp = cookie_manager.get(AUTH_KEY)
         except: pass
-        if c_comp == "LOGGED_OUT":
-            return None
-
-        # 2. 优先级 1：URL 令牌 (仅用于“刚登录”或“刚刷新”的握手瞬间)
+        
         url_token = q_params.get("auth_key")
+        
+        # 优先级排序：
+        # 1. URL 令牌（最直接的握手证明）
         if url_token in ["authenticated", "authenticated_admin"]:
             return url_token
-        
-        # 3. 优先级 2：浏览器原生持久化
+            
+        # 2. 浏览器原生持久化 (Header Cookies)
         if c_val in ["authenticated", "authenticated_admin"]:
             return c_val
             
-        # 4. 优先级 3：组件持久化
+        # 3. 插件持久化 (Component Cookies)
         if c_comp in ["authenticated", "authenticated_admin"]:
             return c_comp
+
+        # 4. 如果以上都没有，且存在注销标记，则彻底判定为未登录
+        if c_val == "LOGGED_OUT" or c_comp == "LOGGED_OUT":
+            return None
             
         return None
 
@@ -695,16 +696,18 @@ try:
         if found_token:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
-            # 💡 关键：阅后即焚！一旦识别成功，立即从 URL 抹掉，防止注销后刷新复燃
-            if "auth_key" in st.query_params:
-                st.query_params.clear() 
+            # 💡 关键：只有在 native cookies 已经同步的情况下才清除 URL 参数
+            # 否则刷新会丢失唯一的凭证
+            if native_cookies.get(AUTH_KEY) in ["authenticated", "authenticated_admin"]:
+                if "auth_key" in st.query_params:
+                    st.query_params.clear()
             st.rerun()
-        elif st.session_state["auth_retry_count"] < 8:
+        elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
                 st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
-                st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在恢复访问权限...</div>", unsafe_allow_html=True)
-                time.sleep(0.4)
+                st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
+                time.sleep(0.5)
                 st.rerun()
 
     # 2. 处理登出请求
