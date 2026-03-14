@@ -1257,7 +1257,7 @@ try:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"])
+            t1, t2, t3 = st.tabs(["📝 待办事项", "🔄 循环事项", "✅ 已完成事项"], key="task_tabs_main")
 
             with t1:
                 if tasks_df.empty:
@@ -1301,8 +1301,12 @@ try:
                 if completed_tasks.empty:
                     st.info("目前没有已完成的事项。")
                 else:
+                    # 💡 强制填充 NaN，确保 is_shade 为准确的布尔值
+                    if '_is_shadow' in completed_tasks.columns:
+                        completed_tasks['_is_shadow'] = completed_tasks['_is_shadow'].fillna(False)
+                    
                     for _, row in completed_tasks.iterrows():
-                        is_shade = row.get('_is_shadow', False)
+                        is_shade = bool(row.get('_is_shadow', False))
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
     with top_tab2:
