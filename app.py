@@ -349,13 +349,10 @@ def mark_recurring_date_completed(task_id, date_str):
     conn.close()
 
 def unmark_recurring_date_completed(task_id, date_str):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("DELETE FROM recurring_completions WHERE task_id = ? AND completed_date = ?", (task_id, date_str))
-    conn.commit()
-    conn.close()
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM recurring_completions WHERE task_id = ? AND completed_date = ?", (task_id, date_str))
+        conn.commit()
 
 def get_recurring_completions():
     try:
