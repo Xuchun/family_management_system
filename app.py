@@ -917,8 +917,14 @@ try:
 
     def render_task(row, is_shadow=False, location="main", is_overdue=False):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
-        del_id = f"{location}_d_{row['id']}"
-        edit_id = f"{location}_e_{row['id']}"
+        if not is_shadow:
+            del_id = f"{location}_d_{row['id']}"
+            edit_id = f"{location}_e_{row['id']}"
+        else:
+            # For shadow tasks, we must include the date to ensure unique keys in the archive
+            date_slug = row['due_date'][:10]
+            del_id = f"sh_{location}_d_{row['id']}_{date_slug}"
+            edit_id = f"sh_{location}_e_{row['id']}_{date_slug}"
         
         with st.container():
             st.markdown('<div class="task-container">', unsafe_allow_html=True)
@@ -964,14 +970,22 @@ try:
                 
                 c2.markdown(f"<p class='todo-text {style} {overdue_cls}'>{row['task']}{recur_tag}</p><div class='todo-date {overdue_date_cls}'>{due_val}</div>", unsafe_allow_html=True)
                 
+                # Action buttons
+                edit_col, del_col = c3.columns(2)
                 if not is_shadow:
-                    edit_col, del_col = c3.columns(2)
                     if edit_col.button("✏️", key=edit_id, help="修改"):
                         st.session_state["editing_task_id"] = row['id']
                         st.rerun()
                     if del_col.button("🗑️", key=del_id, help="删除"):
                         delete_task(row['id'])
                         st.rerun()
+                else:
+                    # Shadow tasks in archive can be "Deleted" (removed from completions)
+                    if row.get('completed'):
+                        if del_col.button("🗑️", key=del_id, help="撤销完成记录"):
+                            date_only = row['due_date'][:10]
+                            unmark_recurring_date_completed(row['id'], date_only)
+                            st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 
