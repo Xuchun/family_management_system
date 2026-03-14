@@ -13,8 +13,9 @@ import requests
 import time
 import threading
 import hashlib
+from cryptography.fernet import Fernet
 
-VERSION = "4.0"
+VERSION = "5.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -45,12 +46,32 @@ try:
     g_script_url = st.secrets["GOOGLE_BACKUP_URL"] if "GOOGLE_BACKUP_URL" in st.secrets else os.getenv("GOOGLE_BACKUP_URL")
     g_client_id = st.secrets["GOOGLE_CLIENT_ID"] if "GOOGLE_CLIENT_ID" in st.secrets else os.getenv("GOOGLE_CLIENT_ID")
     g_client_secret = st.secrets["GOOGLE_CLIENT_SECRET"] if "GOOGLE_CLIENT_SECRET" in st.secrets else os.getenv("GOOGLE_CLIENT_SECRET")
+    db_enc_key = st.secrets["DB_ENCRYPTION_KEY"] if "DB_ENCRYPTION_KEY" in st.secrets else os.getenv("DB_ENCRYPTION_KEY")
 except Exception:
     api_key = os.getenv("OPENAI_API_KEY")
     app_pwd = os.getenv("APP_PASSWORD")
     g_script_url = os.getenv("GOOGLE_BACKUP_URL")
     g_client_id = os.getenv("GOOGLE_CLIENT_ID")
     g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    db_enc_key = os.getenv("DB_ENCRYPTION_KEY")
+
+# --- 🔐 Encryption Logic ---
+cipher_suite = Fernet(db_enc_key.encode()) if db_enc_key else None
+
+def encrypt_str(plain_text):
+    if not cipher_suite or not plain_text: return plain_text
+    try:
+        if isinstance(plain_text, (int, float)): plain_text = str(plain_text)
+        return cipher_suite.encrypt(plain_text.encode()).decode()
+    except: return plain_text
+
+def decrypt_str(cipher_text):
+    if not cipher_suite or not cipher_text: return cipher_text
+    try:
+        return cipher_suite.decrypt(cipher_text.encode()).decode()
+    except:
+        # If decryption fails, it might be plain text (for migration/fallback)
+        return cipher_text
 
 client = OpenAI(api_key=api_key) if api_key else None
 SGT = pytz.timezone('Asia/Singapore')
@@ -94,6 +115,8 @@ def backup_to_gdrive(content_str, filename):
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    
+    # 1. 任务表
     c.execute("PRAGMA table_info(tasks)")
     columns = [col[1] for col in c.fetchall()]
     if not columns:
@@ -110,24 +133,66 @@ def init_db():
         if 'recurring_pattern' not in columns:
             c.execute("ALTER TABLE tasks ADD COLUMN recurring_pattern TEXT")
     
-    # 身高体重记录表
+    # 2. 周期性任务完成记录表
+    c.execute('''CREATE TABLE IF NOT EXISTS recurring_completions
+                 (task_id INTEGER,
+                  completed_date TEXT,
+                  PRIMARY KEY (task_id, completed_date))''')
+
+    # 3. 身高体重记录表
     c.execute('''CREATE TABLE IF NOT EXISTS enya_vitals
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   record_date TEXT NOT NULL,
-                  height REAL,
-                  weight REAL,
+                  height TEXT,
+                  weight TEXT,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
                   
-    # 系统设置表 (用于记录最后备份时间等)
+    # 4. 经期记录表
+    c.execute('''CREATE TABLE IF NOT EXISTS enya_period
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  record_date TEXT NOT NULL,
+                  event_type TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # 5. 系统设置表
     c.execute('''CREATE TABLE IF NOT EXISTS system_config
                  (key TEXT PRIMARY KEY,
                   val TEXT)''')
     
-    # 初始化密码 (如果数据库里没有，则从环境变量/Secrets 导入并进行哈希处理)
+    # 6. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
         hashed_init = hash_password(str(app_pwd))
         c.execute("INSERT INTO system_config (key, val) VALUES ('app_password', ?)", (hashed_init,))
+
+    # --- 🛡️ 数据落盘加密迁移 (Version 5.0 Migration) ---
+    # 检查是否已经迁移过
+    c.execute("SELECT val FROM system_config WHERE key = 'db_encrypted_v5'")
+    if not c.fetchone():
+        # 迁移 tasks 表
+        c.execute("SELECT id, task FROM tasks")
+        for tid, t_text in c.fetchall():
+            if t_text and not t_text.startswith('gAAAAA'): # Fernet tokens start with gAAAAA
+                enc = encrypt_str(t_text)
+                c.execute("UPDATE tasks SET task = ? WHERE id = ?", (enc, tid))
+        
+        # 迁移 enya_vitals 表
+        c.execute("SELECT id, height, weight FROM enya_vitals")
+        for vid, h, w in c.fetchall():
+            # Height/Weight might be stored as REAL/FLOAT in old db, but we need TEXT for encryption
+            enc_h = encrypt_str(str(h)) if h else None
+            enc_w = encrypt_str(str(w)) if w else None
+            c.execute("UPDATE enya_vitals SET height = ?, weight = ? WHERE id = ?", (enc_h, enc_w, vid))
+            
+        # 迁移 enya_period 表
+        c.execute("SELECT id, event_type FROM enya_period")
+        for pid, et in c.fetchall():
+            if et and not et.startswith('gAAAAA'):
+                enc_et = encrypt_str(et)
+                c.execute("UPDATE enya_period SET event_type = ? WHERE id = ?", (enc_et, pid))
+        
+        c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('db_encrypted_v5', 'true')")
+        conn.commit()
 
     conn.commit()
     conn.close()
@@ -213,16 +278,21 @@ def get_tasks():
     query = "SELECT * FROM tasks ORDER BY completed ASC, CASE WHEN due_date IS NULL OR due_date = '' THEN 1 ELSE 0 END, due_date ASC, created_at ASC"
     df = pd.read_sql_query(query, conn)
     conn.close()
+    # 解密任务内容
+    if not df.empty:
+        df['task'] = df['task'].apply(decrypt_str)
     return df
 
 def add_task(task_text):
     try:
         clean_task, due_datetime, recur_pattern = extract_date_llm(task_text)
+        # 加密内容
+        enc_task = encrypt_str(clean_task)
         now_str = get_now_sgt().strftime("%Y-%m-%d %H:%M:%S")
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("INSERT INTO tasks (task, due_date, recurring_pattern, created_at) VALUES (?, ?, ?, ?)", 
-                  (clean_task, due_datetime, recur_pattern, now_str))
+                  (enc_task, due_datetime, recur_pattern, now_str))
         task_id = c.lastrowid
         conn.commit()
         
@@ -232,7 +302,7 @@ def add_task(task_text):
         conn.close()
         
         if row:
-            return {"success": True, "task": row[0], "due": row[1], "recur": recur_pattern}
+            return {"success": True, "task": decrypt_str(row[0]), "due": row[1], "recur": recur_pattern}
         else:
             return {"success": False, "error": "数据库验证插入失败。"}
     except Exception as e:
@@ -263,8 +333,11 @@ def update_task_text(task_id, new_text):
     # AI re-evaluation - but only for date/recur
     clean_text, due_datetime, recur_pattern = extract_date_llm(new_text, f_date, f_recur)
     
+    # 加密新内容
+    enc_text = encrypt_str(clean_text)
+    
     c.execute("UPDATE tasks SET task = ?, due_date = ?, recurring_pattern = ? WHERE id = ?", 
-              (clean_text, due_datetime, recur_pattern, task_id))
+              (enc_text, due_datetime, recur_pattern, task_id))
     conn.commit()
     conn.close()
 
@@ -298,12 +371,18 @@ def get_enya_vitals():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM enya_vitals ORDER BY record_date DESC", conn)
     conn.close()
+    if not df.empty:
+        df['height'] = df['height'].apply(decrypt_str)
+        df['weight'] = df['weight'].apply(decrypt_str)
     return df
 
 def add_enya_vital(date_str, height, weight):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", (date_str, height, weight))
+    # 加密健康数据
+    enc_h = encrypt_str(str(height))
+    enc_w = encrypt_str(str(weight))
+    c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", (date_str, enc_h, enc_w))
     conn.commit()
     conn.close()
 
@@ -318,12 +397,16 @@ def get_enya_periods():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM enya_period ORDER BY record_date DESC", conn)
     conn.close()
+    if not df.empty:
+        df['event_type'] = df['event_type'].apply(decrypt_str)
     return df
 
 def add_enya_period(date_str, event_type):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO enya_period (record_date, event_type) VALUES (?, ?)", (date_str, event_type))
+    # 加密
+    enc_et = encrypt_str(event_type)
+    c.execute("INSERT INTO enya_period (record_date, event_type) VALUES (?, ?)", (date_str, enc_et))
     conn.commit()
     conn.close()
 
