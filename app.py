@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "9.9"
+VERSION = "10.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -211,6 +211,25 @@ def init_db():
         for name, val in default_goals:
             c.execute("INSERT INTO dad_fitness_goals (goal_name, goal_value) VALUES (?, ?)", (encrypt_str(name), encrypt_str(val)))
 
+    # 7. 爸爸的饮食方案表 (v10.0)
+    c.execute('''CREATE TABLE IF NOT EXISTS dad_diet_plans
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  meal_name TEXT NOT NULL,
+                  meal_content TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # 初始化默认饮食方案
+    c.execute("SELECT COUNT(*) FROM dad_diet_plans")
+    if c.fetchone()[0] == 0:
+        default_diets = [
+            ("早饭", "鱼肉(15克蛋白质) + 50克生刚切燕麦 + 一个牛油果 + 一把坚果30克 + 半碗牛奶"),
+            ("午饭", "200g牛排 + 大量炒蔬菜 + 一拳大小的红薯"),
+            ("晚饭", "150g鸡胸肉 + 大量炒蔬菜 + 1个烤土豆"),
+            ("加餐", "训练日：早餐加一个鸡蛋，训练前1-2小时加一片面包和一个希腊酸奶")
+        ]
+        for name, content in default_diets:
+            c.execute("INSERT INTO dad_diet_plans (meal_name, meal_content) VALUES (?, ?)", (encrypt_str(name), encrypt_str(content)))
+
     # 8. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
@@ -313,6 +332,50 @@ def delete_dad_fitness_goal(goal_id):
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
             c.execute("DELETE FROM dad_fitness_goals WHERE id = ?", (goal_id,))
+            conn.commit()
+            return True
+    except:
+        return False
+
+# --- 爸爸的饮食方案管理 (v10.0) ---
+def get_dad_diet_plans():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_diet_plans ORDER BY id ASC", conn)
+            if not df.empty:
+                df['meal_name'] = df['meal_name'].apply(decrypt_str)
+                df['meal_content'] = df['meal_content'].apply(decrypt_str)
+            return df
+    except:
+        return pd.DataFrame()
+
+def add_dad_diet_plan(name, content):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO dad_diet_plans (meal_name, meal_content) VALUES (?, ?)", 
+                      (encrypt_str(name), encrypt_str(content)))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def update_dad_diet_plan(diet_id, name, content):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("UPDATE dad_diet_plans SET meal_name = ?, meal_content = ? WHERE id = ?", 
+                      (encrypt_str(name), encrypt_str(content), diet_id))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def delete_dad_diet_plan(diet_id):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM dad_diet_plans WHERE id = ?", (diet_id,))
             conn.commit()
             return True
     except:
@@ -819,6 +882,15 @@ def generate_master_report():
     
     lines.append("\n【 📅 健身计划 】\n- (暂无详细记录，待后续添加)\n")
     lines.append("\n【 ✅ 健身项目完成记录 】\n- (暂无详细记录，待后续添加)\n")
+
+    # --- 🍽️ 饮食档案 (v10.0) ---
+    lines.append(f"\n\n{'='*30} 🍽️ 爸爸的饮食档案 {'='*30}\n")
+    d_df = get_dad_diet_plans()
+    if not d_df.empty:
+        for _, r in d_df.iterrows():
+            lines.append(f"【{r['meal_name']}】\n内容：{r['meal_content']}\n")
+    else:
+        lines.append("尚无记录。\n")
 
     lines.append(f"\n\n{'='*80}\n备份时间: {now_sgt.strftime('%Y-%m-%d %H:%M:%S')}\n(v{VERSION})")
     return "".join(lines)
@@ -1655,7 +1727,8 @@ try:
                         margin-bottom: -25px !important;
                     }
                     /* 针对 row 下面的 div 间距 */
-                    [data-testid="stVerticalBlock"] > div:has(.fitness-row-marker) {
+                    [data-testid="stVerticalBlock"] > div:has(.fitness-row-marker),
+                    [data-testid="stVerticalBlock"] > div:has(.diet-row-marker) {
                         margin-top: -15px !important;
                         margin-bottom: -15px !important;
                     }
@@ -1689,6 +1762,98 @@ try:
                             if delete_dad_fitness_goal(row['id']):
                                 trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                                 st.rerun()
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader('🍽️ 饮食方案')
+            
+            # --- 饮食方案新增/修改逻辑 ---
+            diet_to_edit = st.session_state.get("diet_to_edit", None)
+            cols_d_inp = st.columns([0.25, 0.55, 0.2])
+            
+            with cols_d_inp[0]:
+                st.markdown("<b>餐段名称</b>", unsafe_allow_html=True)
+                d_name = st.text_input("餐段名称", value=(diet_to_edit['meal_name'] if diet_to_edit else ""), 
+                                      placeholder="如：早饭", key="d_name_inp", label_visibility="collapsed")
+            with cols_d_inp[1]:
+                st.markdown("<b>饮食内容</b>", unsafe_allow_html=True)
+                d_content = st.text_input("饮食内容", value=(diet_to_edit['meal_content'] if diet_to_edit else ""), 
+                                         placeholder="输入具体饮食...", key="d_content_inp", label_visibility="collapsed")
+            
+            def handle_diet_add():
+                name = st.session_state.get("d_name_inp", "").strip()
+                content = st.session_state.get("d_content_inp", "").strip()
+                if name and content:
+                    if add_dad_diet_plan(name, content):
+                        st.session_state["d_name_inp"] = ""
+                        st.session_state["d_content_inp"] = ""
+                        st.session_state["_diet_msg"] = ("toast", "✅ 已添加饮食方案！")
+                        trigger_realtime_backup()
+                else:
+                    st.session_state["_diet_msg"] = ("warning", "⚠️ 请输入完整的名称和内容")
+
+            def handle_diet_update(did):
+                name = st.session_state.get("d_name_inp", "").strip()
+                content = st.session_state.get("d_content_inp", "").strip()
+                if name and content:
+                    if update_dad_diet_plan(did, name, content):
+                        st.session_state.pop("diet_to_edit", None)
+                        st.session_state["d_name_inp"] = ""
+                        st.session_state["d_content_inp"] = ""
+                        st.session_state["_diet_msg"] = ("success", "已更新方案！")
+                        trigger_realtime_backup()
+                else:
+                    st.session_state["_diet_msg"] = ("warning", "请填完信息")
+
+            def handle_diet_cancel():
+                st.session_state.pop("diet_to_edit", None)
+                st.session_state["d_name_inp"] = ""
+                st.session_state["d_content_inp"] = ""
+
+            with cols_d_inp[2]:
+                if diet_to_edit:
+                    st.button("💾 更新", key="diet_update_btn", use_container_width=True, on_click=handle_diet_update, args=(diet_to_edit['id'],))
+                    st.button("取消", key="diet_cancel_btn", on_click=handle_diet_cancel)
+                else:
+                    st.button("➕ 添加", key="diet_add_btn", use_container_width=True, on_click=handle_diet_add)
+
+            # 消息显示
+            diet_msg_ph = st.empty()
+            if "_diet_msg" in st.session_state:
+                m_type, m_txt = st.session_state.pop("_diet_msg")
+                with diet_msg_ph:
+                    if m_type == "toast": st.toast(m_txt, icon="🍲")
+                    elif m_type == "success":
+                        st.success(m_txt)
+                        time.sleep(1)
+                        st.empty()
+                    elif m_type == "warning": st.warning(m_txt)
+
+            # 显示饮食方案列表
+            diet_df = get_dad_diet_plans()
+            if not diet_df.empty:
+                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                for _, row in diet_df.iterrows():
+                    st.markdown("<div class='diet-row-marker'></div>", unsafe_allow_html=True)
+                    d_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
+                    with d_row_cols[0]:
+                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['meal_name']}</b></div>", unsafe_allow_html=True)
+                    with d_row_cols[1]:
+                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem;'>{row['meal_content']}</div>", unsafe_allow_html=True)
+                    
+                    def trigger_diet_edit(r):
+                        st.session_state["diet_to_edit"] = r
+                        st.session_state["d_name_inp"] = r['meal_name']
+                        st.session_state["d_content_inp"] = r['meal_content']
+
+                    with d_row_cols[2]:
+                        st.button("✏️", key=f"edit_d_{row['id']}", use_container_width=True, on_click=trigger_diet_edit, args=(row.to_dict(),))
+                    with d_row_cols[3]:
+                        if st.button("🗑️", key=f"del_d_{row['id']}", use_container_width=True):
+                            if delete_dad_diet_plan(row['id']):
+                                trigger_realtime_backup()
+                                st.rerun()
+            
+            st.markdown("<br>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
             st.info('内容可以先为空，我后面会继续加入。')
