@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "10.4"
+VERSION = "11.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -243,6 +243,26 @@ def init_db():
         c.execute("INSERT INTO dad_fitness_plans (plan_name, plan_content) VALUES (?, ?)", 
                   (encrypt_str("总体计划"), encrypt_str("每周重量训练3次，有氧运动150分钟，HIIT/羽毛球训练1次")))
 
+    # 11. 爸爸的重量训练计划细节表 (v11.0)
+    c.execute('''CREATE TABLE IF NOT EXISTS dad_training_details
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  train_day TEXT NOT NULL,
+                  train_content TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # 初始化默认训练细节
+    c.execute("SELECT COUNT(*) FROM dad_training_details")
+    if c.fetchone()[0] == 0:
+        default_training = [
+            ("周二", "练上肢"),
+            ("周四", "练背部"),
+            ("周五", "练腿"),
+            ("周六", "瑜伽"),
+            ("周日", "羽毛球")
+        ]
+        for day, content in default_training:
+            c.execute("INSERT INTO dad_training_details (train_day, train_content) VALUES (?, ?)", (encrypt_str(day), encrypt_str(content)))
+
     # 8. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
@@ -433,6 +453,50 @@ def delete_dad_fitness_plan(plan_id):
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
             c.execute("DELETE FROM dad_fitness_plans WHERE id = ?", (plan_id,))
+            conn.commit()
+            return True
+    except:
+        return False
+
+# --- 爸爸的训练细节管理 (v11.0) ---
+def get_dad_training_details():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_training_details ORDER BY id ASC", conn)
+            if not df.empty:
+                df['train_day'] = df['train_day'].apply(decrypt_str)
+                df['train_content'] = df['train_content'].apply(decrypt_str)
+            return df
+    except:
+        return pd.DataFrame()
+
+def add_dad_training_detail(day, content):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO dad_training_details (train_day, train_content) VALUES (?, ?)", 
+                      (encrypt_str(day), encrypt_str(content)))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def update_dad_training_detail(detail_id, day, content):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("UPDATE dad_training_details SET train_day = ?, train_content = ? WHERE id = ?", 
+                      (encrypt_str(day), encrypt_str(content), detail_id))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def delete_dad_training_detail(detail_id):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM dad_training_details WHERE id = ?", (detail_id,))
             conn.commit()
             return True
     except:
@@ -939,6 +1003,15 @@ def generate_master_report():
     
     lines.append("\n【 📅 健身计划 】\n- (暂无详细记录，待后续添加)\n")
     lines.append("\n【 ✅ 健身项目完成记录 】\n- (暂无详细记录，待后续添加)\n")
+
+    # --- 📋 健身计划细节 (v11.0) ---
+    lines.append(f"\n\n{'='*30} 📋 爸爸的健身训练细节 {'='*30}\n")
+    td_df = get_dad_training_details()
+    if not td_df.empty:
+        for _, r in td_df.iterrows():
+            lines.append(f"【{r['train_day']}】内容：{r['train_content']}\n")
+    else:
+        lines.append("尚无记录。\n")
 
     # --- 📋 健身计划 (v10.4) ---
     lines.append(f"\n\n{'='*30} 📋 爸爸的健身计划 {'='*30}\n")
@@ -1795,7 +1868,8 @@ try:
                     /* 针对 row 下面的 div 间距 */
                     [data-testid="stVerticalBlock"] > div:has(.fitness-row-marker),
                     [data-testid="stVerticalBlock"] > div:has(.diet-row-marker),
-                    [data-testid="stVerticalBlock"] > div:has(.plan-row-marker) {
+                    [data-testid="stVerticalBlock"] > div:has(.plan-row-marker),
+                    [data-testid="stVerticalBlock"] > div:has(.train-row-marker) {
                         margin-top: -15px !important;
                         margin-bottom: -15px !important;
                     }
@@ -1950,78 +2024,35 @@ try:
             st.markdown("<br>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
-            # --- 健身计划新增/修改逻辑 (v10.4) ---
+            # 🛠️ v11.0 响应用户要求，去掉了“健身计划”和“总体计划”之间的输入区域
             plan_to_edit = st.session_state.get("plan_to_edit", None)
-            cols_p_inp = st.columns([0.25, 0.55, 0.2])
             
-            with cols_p_inp[0]:
-                st.markdown("<b>计划名称</b>", unsafe_allow_html=True)
-                p_name_val = st.text_input("计划名称", value=(plan_to_edit['plan_name'] if plan_to_edit else ""), 
-                                         placeholder="如：总体计划", key="p_name_inp", label_visibility="collapsed")
-            with cols_p_inp[1]:
-                st.markdown("<b>详细内容</b>", unsafe_allow_html=True)
-                curr_p_content = st.session_state.get("p_content_inp", "")
-                if not curr_p_content and plan_to_edit: curr_p_content = plan_to_edit['plan_content']
-                p_lines = curr_p_content.count('\n') + 1
-                p_dynamic_h = min(400, max(40, p_lines * 24 + 16))
-                
-                p_content_val = st.text_area("详细内容", value=(plan_to_edit['plan_content'] if plan_to_edit else ""), 
-                                          placeholder="输入具体健身安排...", 
-                                          height=p_dynamic_h, key="p_content_inp", label_visibility="collapsed")
-            
-            def handle_plan_add():
-                name = st.session_state.get("p_name_inp", "").strip()
-                content = st.session_state.get("p_content_inp", "").strip()
-                if name and content:
-                    if add_dad_fitness_plan(name, content):
-                        st.session_state["p_name_inp"] = ""
-                        st.session_state["p_content_inp"] = ""
-                        st.session_state["_plan_msg"] = ("toast", "✅ 计划已添加！")
-                        trigger_realtime_backup()
-                else:
-                    st.session_state["_plan_msg"] = ("warning", "⚠️ 请输入名称和内容")
-
-            def handle_plan_update(pid):
-                name = st.session_state.get("p_name_inp", "").strip()
-                content = st.session_state.get("p_content_inp", "").strip()
-                if name and content:
-                    if update_dad_fitness_plan(pid, name, content):
+            # 仅在编辑模式下显示输入框
+            if plan_to_edit:
+                cols_p_edit = st.columns([0.25, 0.55, 0.2])
+                with cols_p_edit[0]:
+                    p_name_val = st.text_input("计划名称", value=plan_to_edit['plan_name'], key="p_name_inp", label_visibility="collapsed")
+                with cols_p_edit[1]:
+                    curr_pe = st.session_state.get("p_content_inp", plan_to_edit['plan_content'])
+                    pe_lines = curr_pe.count('\n') + 1
+                    pe_h = min(400, max(40, pe_lines * 24 + 16))
+                    p_content_val = st.text_area("详细内容", value=plan_to_edit['plan_content'], height=pe_h, key="p_content_inp", label_visibility="collapsed")
+                with cols_p_edit[2]:
+                    def handle_p_up(pid):
+                        n = st.session_state.get("p_name_inp", "").strip()
+                        c = st.session_state.get("p_content_inp", "").strip()
+                        if n and c:
+                            if update_dad_fitness_plan(pid, n, c):
+                                st.session_state.pop("plan_to_edit", None)
+                                st.rerun()
+                    def handle_p_can():
                         st.session_state.pop("plan_to_edit", None)
-                        st.session_state["p_name_inp"] = ""
-                        st.session_state["p_content_inp"] = ""
-                        st.session_state["_plan_msg"] = ("success", "计划已更新！")
-                        trigger_realtime_backup()
-                else:
-                    st.session_state["_plan_msg"] = ("warning", "请填完信息")
+                    st.button("💾 保存", key="p_save_btn_ed", on_click=handle_p_up, args=(plan_to_edit['id'],), use_container_width=True)
+                    st.button("取消", key="p_can_btn_ed", on_click=handle_p_can, use_container_width=True)
 
-            def handle_plan_cancel():
-                st.session_state.pop("plan_to_edit", None)
-                st.session_state["p_name_inp"] = ""
-                st.session_state["p_content_inp"] = ""
-
-            with cols_p_inp[2]:
-                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
-                if plan_to_edit:
-                    st.button("💾 保存", key="p_save_btn", use_container_width=True, on_click=handle_plan_update, args=(plan_to_edit['id'],))
-                    st.button("取消", key="p_cancel_btn", on_click=handle_plan_cancel)
-                else:
-                    st.button("➕ 添加", key="p_add_btn", use_container_width=True, on_click=handle_plan_add)
-
-            plan_msg_ph = st.empty()
-            if "_plan_msg" in st.session_state:
-                m_type, m_txt = st.session_state.pop("_plan_msg")
-                with plan_msg_ph:
-                    if m_type == "toast": st.toast(m_txt, icon="🏋️")
-                    elif m_type == "success":
-                        st.success(m_txt)
-                        time.sleep(1)
-                        st.empty()
-                    elif m_type == "warning": st.warning(m_txt)
-
-            # 显示计划列表
+            # 显示现有计划（总体计划等）
             plan_df = get_dad_fitness_plans()
             if not plan_df.empty:
-                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 for _, row in plan_df.iterrows():
                     st.markdown("<div class='plan-row-marker'></div>", unsafe_allow_html=True)
                     p_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
@@ -2029,17 +2060,87 @@ try:
                         st.markdown(f"<div style='padding-top: 4px;'><b>{row['plan_name']}</b></div>", unsafe_allow_html=True)
                     with p_row_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['plan_content']}</div>", unsafe_allow_html=True)
-                    
-                    def trigger_plan_edit(r):
-                        st.session_state["plan_to_edit"] = r
-                        st.session_state["p_name_inp"] = r['plan_name']
-                        st.session_state["p_content_inp"] = r['plan_content']
-
                     with p_row_cols[2]:
-                        st.button("✏️", key=f"edit_p_{row['id']}", use_container_width=True, on_click=trigger_plan_edit, args=(row.to_dict(),))
+                        if st.button("✏️", key=f"edit_p_{row['id']}"):
+                            st.session_state["plan_to_edit"] = row.to_dict()
+                            st.rerun()
                     with p_row_cols[3]:
-                        if st.button("🗑️", key=f"del_p_{row['id']}", use_container_width=True):
-                            if delete_dad_fitness_plan(row['id']):
+                        if st.button("🗑️", key=f"del_p_{row['id']}"):
+                            if delete_dad_fitness_plan(row['id']): st.rerun()
+
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+            st.subheader('🏋️ 重量训练计划细节')
+            
+            # --- 重量训练细节 CRUD (v11.0) ---
+            train_to_edit = st.session_state.get("train_to_edit", None)
+            cols_t_inp = st.columns([0.25, 0.55, 0.2])
+            
+            with cols_t_inp[0]:
+                st.markdown("<b>日期</b>", unsafe_allow_html=True)
+                t_day = st.text_input("日期", value=(train_to_edit['train_day'] if train_to_edit else ""), 
+                                      placeholder="如：周二", key="t_day_inp", label_visibility="collapsed")
+            with cols_t_inp[1]:
+                st.markdown("<b>训练内容</b>", unsafe_allow_html=True)
+                curr_t_val = st.session_state.get("t_content_inp", "")
+                if not curr_t_val and train_to_edit: curr_t_val = train_to_edit['train_content']
+                t_lines = curr_t_val.count('\n') + 1
+                t_h = min(400, max(40, t_lines * 24 + 16))
+                t_content = st.text_area("训练内容", value=(train_to_edit['train_content'] if train_to_edit else ""), 
+                                         height=t_h, key="t_content_inp", label_visibility="collapsed")
+
+            def handle_train_add():
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if add_dad_training_detail(d, c):
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+                        st.rerun()
+
+            def handle_train_update(tid):
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if update_dad_training_detail(tid, d, c):
+                        st.session_state.pop("train_to_edit", None)
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+                        st.rerun()
+
+            def handle_train_cancel():
+                st.session_state.pop("train_to_edit", None)
+                st.session_state["t_day_inp"] = ""
+                st.session_state["t_content_inp"] = ""
+
+            with cols_t_inp[2]:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
+                if train_to_edit:
+                    st.button("💾 更新", key="t_up_btn", use_container_width=True, on_click=handle_train_update, args=(train_to_edit['id'],))
+                    st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
+                else:
+                    st.button("➕ 添加", key="t_add_btn", use_container_width=True, on_click=handle_train_add)
+
+            # 显示训练细节列表
+            train_df = get_dad_training_details()
+            if not train_df.empty:
+                for _, row in train_df.iterrows():
+                    st.markdown("<div class='train-row-marker'></div>", unsafe_allow_html=True)
+                    t_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
+                    with t_row_cols[0]:
+                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['train_day']}</b></div>", unsafe_allow_html=True)
+                    with t_row_cols[1]:
+                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
+                    with t_row_cols[2]:
+                        if st.button("✏️", key=f"edit_t_{row['id']}"):
+                            st.session_state["train_to_edit"] = row.to_dict()
+                            st.session_state["t_day_inp"] = row['train_day']
+                            st.session_state["t_content_inp"] = row['train_content']
+                            st.rerun()
+                    with t_row_cols[3]:
+                        if st.button("🗑️", key=f"del_t_{row['id']}"):
+                            if delete_dad_training_detail(row['id']):
                                 trigger_realtime_backup()
                                 st.rerun()
 
