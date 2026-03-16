@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6"
+VERSION = "9.6.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1602,30 +1602,49 @@ try:
                     if cols_g[2].button("💾 更新", use_container_width=True, type="primary"):
                         if g_name and g_val:
                             if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
-                                st.session_state.pop("goal_to_edit")
+                                if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
                                 st.success("已更新！")
+                                time.sleep(0.5)
                                 st.rerun()
+                        else: st.warning("请填完信息")
                     if st.button("取消修改", key="cancel_edit_goal"):
-                        st.session_state.pop("goal_to_edit")
+                        if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
                         st.rerun()
                 else:
                     if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
                         if g_name and g_val:
                             if add_dad_fitness_goal(g_name, g_val):
-                                st.success("已添加！")
+                                st.toast("✅ 已添加新目标！", icon="✨")
+                                time.sleep(0.5)
                                 st.rerun()
+                        else:
+                            st.warning("⚠️ 请输入完整的目标名称和数值")
 
-            st.markdown("---")
+            st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_allow_html=True)
             
             # --- 2. 显示目标列表 ---
             goals_df = get_dad_fitness_goals()
             if goals_df.empty:
                 st.info("目前没有设定健身目标，点击上方展开新增。")
             else:
+                # 注入紧凑样式
+                st.markdown("""
+                    <style>
+                    .fitness-item {
+                        display: flex;
+                        align-items: center;
+                        padding: 2px 0;
+                        margin-bottom: -10px;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+                
                 for _, row in goals_df.iterrows():
                     g_cols = st.columns([0.35, 0.35, 0.15, 0.15])
-                    g_cols[0].markdown(f"**{row['goal_name']}**")
-                    g_cols[1].write(row['goal_value'])
+                    with g_cols[0]:
+                        st.markdown(f"<div style='padding-top: 8px;'><b>{row['goal_name']}</b></div>", unsafe_allow_html=True)
+                    with g_cols[1]:
+                        st.markdown(f"<div style='padding-top: 8px;'>{row['goal_value']}</div>", unsafe_allow_html=True)
                     
                     if g_cols[2].button("✏️", key=f"edit_g_{row['id']}", help="修改此目标"):
                         st.session_state["goal_to_edit"] = row.to_dict()
@@ -1634,7 +1653,7 @@ try:
                     if g_cols[3].button("🗑️", key=f"del_g_{row['id']}", help="删除此目标"):
                         if delete_dad_fitness_goal(row['id']):
                             st.rerun()
-                    st.divider()
+                    st.markdown("<hr style='margin: 5px 0; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
             st.info('内容可以先为空，我后面会继续加入。')
