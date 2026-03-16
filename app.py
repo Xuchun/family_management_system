@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.2"
+VERSION = "9.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -788,17 +788,21 @@ def run_auto_backup_logic(silent=True):
                 last_date = res[0] if res else ""
                 
                 if last_date != current_date:
-                    # 1. 备份文本报告 (使用独立名称)
-                    content = generate_master_report()
-                    report_name = f"AutoSync_Report_{target_slot}.txt"
-                    backup_to_gdrive(content, report_name, overwrite=True, is_binary=False)
+                    # 获取精确的时间戳字符串
+                    time_str = now.strftime("%Y-%m-%d-%H:%M")
                     
-                    # 2. 备份二进制数据库 (使用独立名称)
+                    # 1. 备份文本报告 (带日期时间的独立名称)
+                    content = generate_master_report()
+                    report_name = f"auto_daily_backup_{time_str}.txt"
+                    backup_to_gdrive(content, report_name, overwrite=False, is_binary=False)
+                    
+                    # 2. 备份二进制数据库 (带日期时间的独立名称)
                     if os.path.exists(DB_FILE):
                         with open(DB_FILE, "rb") as f:
                             db_bytes = f.read()
                             db_b64 = base64.b64encode(db_bytes).decode('utf-8')
-                        backup_to_gdrive(db_b64, f"AutoSync_DB_{target_slot}.db", overwrite=True, is_binary=True)
+                        db_name = f"auto_daily_db_backup_{time_str}.db"
+                        backup_to_gdrive(db_b64, db_name, overwrite=False, is_binary=True)
                     
                     # 更新最后同步日期
                     c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
