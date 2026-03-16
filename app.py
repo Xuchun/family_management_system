@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.3"
+VERSION = "9.6.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1590,35 +1590,33 @@ try:
         with top_tab2:
             st.markdown("<h2 style='color: #1e40af;'>🎯 爸爸的健身目标</h2>", unsafe_allow_html=True)
             
-            # --- 1. 新增/修改目标逻辑 ---
-            goal_to_edit = st.session_state.get("goal_to_edit", None)
+            # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
+            st.markdown(f"#### ➕ {('修改目标' if goal_to_edit else '新增目标')}")
+            cols_g = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
+            g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
+            g_val = cols_g[1].text_input("目标数值/区间", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), placeholder="如：65-67公斤", key="g_val_inp")
             
-            with st.expander("➕ " + ("修改目标" if goal_to_edit else "新增健身目标"), expanded=(goal_to_edit is not None)):
-                cols_g = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
-                g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
-                g_val = cols_g[1].text_input("目标数值/区间", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), placeholder="如：65-67公斤", key="g_val_inp")
-                
-                if goal_to_edit:
-                    if cols_g[2].button("💾 更新", use_container_width=True, type="primary"):
-                        if g_name and g_val:
-                            if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
-                                if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
-                                st.success("已更新！")
-                                time.sleep(0.5)
-                                st.rerun()
-                        else: st.warning("请填完信息")
-                    if st.button("取消修改", key="cancel_edit_goal"):
-                        if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
-                        st.rerun()
-                else:
-                    if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
-                        if g_name and g_val:
-                            if add_dad_fitness_goal(g_name, g_val):
-                                st.toast("✅ 已添加新目标！", icon="✨")
-                                time.sleep(0.5)
-                                st.rerun()
-                        else:
-                            st.warning("⚠️ 请输入完整的目标名称和数值")
+            if goal_to_edit:
+                if cols_g[2].button("💾 更新", use_container_width=True, type="primary"):
+                    if g_name and g_val:
+                        if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
+                            if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
+                            st.success("已更新！")
+                            time.sleep(0.5)
+                            st.rerun()
+                    else: st.warning("请填完信息")
+                if st.button("取消修改", key="cancel_edit_goal"):
+                    if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
+                    st.rerun()
+            else:
+                if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
+                    if g_name and g_val:
+                        if add_dad_fitness_goal(g_name, g_val):
+                            st.toast("✅ 已添加新目标！", icon="✨")
+                            time.sleep(0.5)
+                            st.rerun()
+                    else:
+                        st.warning("⚠️ 请输入完整的目标名称和数值")
 
             st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_allow_html=True)
             
