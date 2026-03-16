@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "10.1"
+VERSION = "10.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1776,10 +1776,33 @@ try:
                                       placeholder="如：早饭", key="d_name_inp", label_visibility="collapsed")
             with cols_d_inp[1]:
                 st.markdown("<b>饮食内容</b>", unsafe_allow_html=True)
-                # 🛠️ v10.1 改为 text_area 以支持多行输入 (回车换行)
+                # 🛠️ v10.2 动态高度逻辑：根据回车行数自动撑开
+                curr_diet_val = st.session_state.get("d_content_inp", "")
+                if not curr_diet_val and diet_to_edit:
+                    curr_diet_val = diet_to_edit['meal_content']
+                
+                # 计算行数，每行约 24px，基础高度 40px (一行)
+                n_lines = curr_diet_val.count('\n') + 1
+                dynamic_h = max(40, n_lines * 24 + 16)
+                
+                # 限制最大高度
+                dynamic_h = min(400, dynamic_h)
+
                 d_content = st.text_area("饮食内容", value=(diet_to_edit['meal_content'] if diet_to_edit else ""), 
                                          placeholder="输入具体饮食内容，允许回车换行...", 
-                                         height=80, key="d_content_inp", label_visibility="collapsed")
+                                         height=dynamic_h, key="d_content_inp", label_visibility="collapsed")
+                
+                # 强制 CSS 去掉右下角缩放手柄，视觉更统一
+                st.markdown("""
+                    <style>
+                    div[data-testid="stTextArea"] textarea {
+                        resize: none;
+                        padding-top: 8px !important;
+                        padding-bottom: 8px !important;
+                        min-height: 40px !important;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
             
             def handle_diet_add():
                 name = st.session_state.get("d_name_inp", "").strip()
