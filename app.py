@@ -16,9 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-import re
-
-VERSION = "9.8"
+VERSION = "9.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -322,8 +320,10 @@ def delete_dad_fitness_goal(goal_id):
 
 def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
     """
-    v6.4 - 绝对原文保全引擎 (Immutable Tail Protocol)
-    规则：第一个逗号之后的所有字符，均视为“神圣原文”，AI 绝对无法触碰。
+    v9.9 - 绝对防线引擎 (Total Comma Firewall)
+    规则：第一个逗号之后的所有文字，均视为“神圣不可触碰”。
+    AI 物理隔离：只传逗号前的文字给 AI 分析时间和核心事情。
+    物理缝合：不管 AI 怎么想，逗号后的文字一律原样保留归档。
     """
     if not client or not task_text or not task_text.strip():
         return task_text, fallback_date, fallback_recur
@@ -332,92 +332,67 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
     f_date = fallback_date if fallback_date else now.strftime("%Y-%m-%d 23:59")
     f_recur = fallback_recur if fallback_recur else "None"
     
-    # 🕵️‍♂️ 第1步：物理级分流 (Python 层级执行，不可逾越)
-    # 查找首个逗号（半角或全角）
+    # 🕵️‍♂️ 第1步：物理级分流 (Python 强制执行)
     idx_en = task_text.find(',')
     idx_cn = task_text.find('，')
-    
-    if idx_en != -1 and idx_cn != -1:
-        idx = min(idx_en, idx_cn)
-    else:
-        idx = idx_en if idx_en != -1 else idx_cn
+    if idx_en != -1 and idx_cn != -1: idx = min(idx_en, idx_cn)
+    else: idx = idx_en if idx_en != -1 else idx_cn
         
     has_comma = (idx != -1)
-    
     if has_comma:
-        head_orig = task_text[:idx]
-        # ⚠️ 这里是核心：tail_verbatim 包含了逗号及其后的所有原始字符，字迹完全锁定
-        tail_verbatim = task_text[idx:] 
+        head_orig = task_text[:idx].strip()
+        tail_verbatim = task_text[idx:] # 包含逗号及其后所有内容
     else:
-        head_orig = task_text
+        head_orig = task_text.strip()
         tail_verbatim = ""
 
+    # 如果只有后缀且没前缀，直接返回原样内容（去掉开头的那个逗号）
+    if has_comma and not head_orig:
+        return tail_verbatim[1:].strip(), f_date, (None if f_recur == "None" else f_recur)
+
     try:
-        # --- 任务 A: 调度解析 (AI 仅可见逗号前的内容) ---
-        prompt_info = f"""
-        你是一位极其严谨的精密调度专家。今天是 {now.strftime('%Y-%m-%d')}。
+        # --- 统一 AI 任务：分析时间 + 清洗前缀 ---
+        # 仅将 head_orig 送往 AI，确保 tail_verbatim 永远不被分析
+        prompt = f"""
+        你是一位极端严谨的家庭事务助理。由于系统架构原因，你只能看见任务的“开头片段”。
+        今天是 {now.strftime('%Y-%m-%d')}。
         
-        【防火墙指令】：你只能看见任务的“核心前缀”。请仅基于此分析时间和模式。
+        【分析片段】："{head_orig}"
         
-        你的任务：从提供的“片段”中分析截止日期（date）和循环模式（recur）。
+        你的职责：
+        1. 仅从分析片段中识别出日期（date）和重复模式（recur）。
+        2. 将分析片段中“属于时间描述”的部分移除，保留剩下的“任务文字”。
+        3. 【核心禁令】：严禁改动、润饰、概括或补全任何非时间词汇。如果片段全是时间词，核心内容请返回空。
         
-        【重要判别准则】：
-        1. 必须区分“描述性语言”与“调度意图”。
-           - 如果用户说“检查每日同步报告”，其中的“每日”是报告属性，不是任务频率。
-           - 如果用户指明了具体时间（如“明天早上9点”、“3月20日”），这通常是一个“None”循环的一次性任务。
-        2. 只有明确要求“每天/每周/每月都要做”时，才设置 recur。
-        
-        分析片段："{head_orig}"
-        备选值：date={f_date}, recur={f_recur}
-        返回 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/daily/weekly/monthly/..." }}
+        返回格式 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/daily/weekly...", "cleaned_task": "..." }}
         """
-        res_info = client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt_info}],
+            messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0
         )
-        data_info = json.loads(res_info.choices[0].message.content)
-        dt_str = str(data_info.get("date", f_date)).strip()
-        recur_str = str(data_info.get("recur", f_recur)).strip()
+        res_data = json.loads(response.choices[0].message.content)
+        
+        dt_str = res_data.get("date", f_date)
+        recur_str = res_data.get("recur", f_recur)
+        cleaned_head = res_data.get("cleaned_task", "").strip()
 
-        # --- 任务 B: 前缀清洗 (AI 仅可见逗号前的内容) ---
-        cleaned_head = head_orig
-        if head_orig.strip():
-            prompt_clean = f"""
-            你是一个纯粹的文字清洁工。
-            任务：移除下面片段中的时间/日期词汇。
-            片段："{head_orig}"
-            指令：
-            1. 仅移除时间词。
-            2. 严禁改动、润色、概括、润饰或翻译其他文字。
-            3. 如果删完后没剩其它字，请返回 "(EMPTY)"。
-            """
-            res_clean = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt_clean}],
-                temperature=0
-            )
-            ai_out = res_clean.choices[0].message.content.strip().strip('"').strip()
-            
-            # 白名单防御：如果 AI 返回了原片段中不存在的新字，直接废弃 AI 结果
-            orig_chars = set(head_orig)
-            if all(c in orig_chars or c.isspace() or c in [',', '，', '.', '。'] for c in ai_out) and ai_out != "(EMPTY)":
-                cleaned_head = ai_out
-            elif ai_out == "(EMPTY)":
-                cleaned_head = ""
+        # 安全防御：如果 AI 产生的文字里包含了前缀中没有的非法字符，说明产生了幻觉，退回到原文
+        orig_chars = set(head_orig)
+        if not all(c in orig_chars or c.isspace() or c in [',', '，', '.', '。'] for c in cleaned_head):
+            cleaned_head = head_orig
 
-        # --- 第4步：物理缝合 (拼接 AI 处理过的前缀和物理锁定的原始后缀) ---
+        # 缝合逻辑
         if has_comma:
             if not cleaned_head:
-                # 前缀只有时间词，删光了 -> 直接取原样后缀并去掉开头的逗号
-                # 注意：tail_verbatim[0] 是逗号本身
+                # 前缀只有时间，洗完干净了 -> 直接拿后缀
                 final_task = tail_verbatim[1:].strip()
             else:
-                # 拼接：[洗净的前缀] + [100% 原始后缀（含逗号）]
-                final_task = cleaned_head.strip() + tail_verbatim
+                # 保留已清洗的前缀 + 圆封不动的后缀
+                final_task = cleaned_head + tail_verbatim
         else:
-            final_task = cleaned_head.strip()
+            final_task = cleaned_head if cleaned_head else head_orig
 
         # 时间合法性终审
         try:
@@ -428,7 +403,7 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         return final_task, dt_str, (None if recur_str == "None" else recur_str)
 
     except Exception as e:
-        print(f"LLM 解析错误 (v6.4): {e}")
+        print(f"Firewall Parsing Error (v9.9): {e}")
         return task_text, f_date, (None if f_recur == "None" else f_recur)
 
 def get_tasks():
