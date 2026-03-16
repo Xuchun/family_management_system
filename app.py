@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.4"
+VERSION = "9.7.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1633,11 +1633,11 @@ try:
                 st.session_state["g_val_inp"] = ""
 
             if goal_to_edit:
-                cols_g[2].button("💾 更新", use_container_width=True, type="primary", 
+                cols_g[2].button("💾 更新", use_container_width=True, 
                                 on_click=handle_update, args=(goal_to_edit['id'],))
                 st.button("取消修改", key="cancel_edit_goal", on_click=handle_cancel)
             else:
-                cols_g[2].button("➕ 添加", use_container_width=True, type="primary", on_click=handle_add)
+                cols_g[2].button("➕ 添加", use_container_width=True, on_click=handle_add)
 
             # 🛠️ v9.7.3 消息显示占位符
             msg_ph = st.empty()
