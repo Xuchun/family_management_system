@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.2"
+VERSION = "9.6.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1664,8 +1664,6 @@ try:
                         if st.button("🗑️", key=f"del_g_{row['id']}", help="删除此目标", use_container_width=True):
                             if delete_dad_fitness_goal(row['id']):
                                 st.rerun()
-                    
-                    st.markdown("<hr style='margin: 2px 0; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
             st.info('内容可以先为空，我后面会继续加入。')
