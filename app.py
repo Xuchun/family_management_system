@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.1"
+VERSION = "9.6.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1627,33 +1627,45 @@ try:
             if goals_df.empty:
                 st.info("目前没有设定健身目标，点击上方展开新增。")
             else:
-                # 注入紧凑样式
+                # 🛠️ v9.6.2 超紧凑设计：通过 CSS 强力压缩所有相关组件的间距
                 st.markdown("""
                     <style>
-                    .fitness-item {
-                        display: flex;
-                        align-items: center;
-                        padding: 2px 0;
-                        margin-bottom: -10px;
+                    /* 针对健身记录行的专属紧凑化 */
+                    .fitness-row-container {
+                        margin-bottom: -25px !important;
+                    }
+                    /* 针对 row 下面的 div 间距 */
+                    [data-testid="stVerticalBlock"] > div:has(.fitness-row-marker) {
+                        margin-top: -15px !important;
+                        margin-bottom: -15px !important;
+                    }
+                    /* 按钮垂直对齐微调 */
+                    .stButton button {
+                        margin-top: 0px !important;
                     }
                     </style>
                 """, unsafe_allow_html=True)
                 
                 for _, row in goals_df.iterrows():
+                    # 标记这个 block 属于健身行
+                    st.markdown("<div class='fitness-row-marker'></div>", unsafe_allow_html=True)
                     g_cols = st.columns([0.35, 0.35, 0.15, 0.15])
                     with g_cols[0]:
-                        st.markdown(f"<div style='padding-top: 8px;'><b>{row['goal_name']}</b></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['goal_name']}</b></div>", unsafe_allow_html=True)
                     with g_cols[1]:
-                        st.markdown(f"<div style='padding-top: 8px;'>{row['goal_value']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='padding-top: 4px;'>{row['goal_value']}</div>", unsafe_allow_html=True)
                     
-                    if g_cols[2].button("✏️", key=f"edit_g_{row['id']}", help="修改此目标"):
-                        st.session_state["goal_to_edit"] = row.to_dict()
-                        st.rerun()
-                        
-                    if g_cols[3].button("🗑️", key=f"del_g_{row['id']}", help="删除此目标"):
-                        if delete_dad_fitness_goal(row['id']):
+                    with g_cols[2]:
+                        if st.button("✏️", key=f"edit_g_{row['id']}", help="修改此目标", use_container_width=True):
+                            st.session_state["goal_to_edit"] = row.to_dict()
                             st.rerun()
-                    st.markdown("<hr style='margin: 5px 0; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
+                    
+                    with g_cols[3]:
+                        if st.button("🗑️", key=f"del_g_{row['id']}", help="删除此目标", use_container_width=True):
+                            if delete_dad_fitness_goal(row['id']):
+                                st.rerun()
+                    
+                    st.markdown("<hr style='margin: 2px 0; border: 0; border-top: 1px solid #eee;'>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
             st.info('内容可以先为空，我后面会继续加入。')
