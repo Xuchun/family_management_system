@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "6.6"
+VERSION = "6.7"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -596,20 +596,23 @@ def generate_master_report():
         lines.append(f"{'截止时间':<19}| {'任务内容':<50}| {'循环'}\n")
         lines.append("-" * 80 + "\n")
         
-        if not items:
+        # 🕵️‍♂️ 修复：处理 DataFrame 和 List 的空值判断
+        is_empty = False
+        if isinstance(items, pd.DataFrame):
+            is_empty = items.empty
+            iterable = items.iterrows()
+            is_df = True
+        else:
+            is_empty = not items
+            iterable = items
+            is_df = False
+
+        if is_empty:
             lines.append(f"{' (暂无事项)':<19}| {'--':<50}| {'--'}\n")
         else:
-            # 判断 items 类型 (list of dicts 或 DataFrame)
-            if isinstance(items, pd.DataFrame):
-                iterable = items.iterrows()
-                is_df = True
-            else:
-                iterable = items
-                is_df = False
-
-            for item in items:
+            for item in iterable:
                 # 获取行数据
-                row = item if not is_df else item[1]
+                row = item[1] if is_df else item
                 
                 # 1. 截止时间清理
                 due_val = str(row.get('due_date', '') or '').strip()
