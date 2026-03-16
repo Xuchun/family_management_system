@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.4"
+VERSION = "8.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1298,9 +1298,9 @@ try:
                     trigger_realtime_backup()
                     st.toast("✅ 双重同步任务已在后台启动！", icon="🚀")
             
-            # 2. 数据恢复 (Tab 切换模拟或直接锚点)
+            # 2. 数据恢复 (v8.5 采用状态机驱动的模态导航)
             if st.button("🛡️ 进入数据恢复中心", use_container_width=True):
-                st.session_state["active_tab_index"] = 4 # 记录要切到第 5 个 Tab
+                st.session_state["show_recovery_center"] = True
                 st.rerun()
 
             # 3. 访问密码 (仅限管理员)
@@ -1325,9 +1325,68 @@ try:
 
     st.markdown('<br>', unsafe_allow_html=True)
     
-    # 获取当前激活的 Tab 索引来控制默认显示
-    default_tab_idx = st.session_state.get("active_tab_index", 0)
-    top_tab1, top_tab2, top_tab3, top_tab4, top_tab5 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康', '🛡️ 数据恢复中心'])
+    # v8.5 状态导航引擎：判断是否处于“数据恢复视图”
+    if st.session_state.get("show_recovery_center", False):
+        # --- 恢复中心 专用视图 ---
+        tc1, tc2 = st.columns([0.7, 0.3])
+        with tc1:
+            st.markdown("## 🛡️ 数据恢复中心 (救生艇模式)")
+        with tc2:
+            if st.button("⬅️ 返回主控制台", use_container_width=True, type="primary"):
+                st.session_state["show_recovery_center"] = False
+                st.rerun()
+        
+        st.info("💡 **核心提示**: 如果您在 Streamlit Cloud 重启后发现数据为空，请使用以下任意一种方式恢复。")
+        
+        # 将原 Data Recovery 逻辑移入此处
+        recovery_tab1, recovery_tab2 = st.tabs(["🧬 路径 A: 二进制恢复 (.db)", "📝 路径 B: 文本报告还原 (.txt)"])
+        
+        with recovery_tab1:
+            st.markdown("### 🧬 二进制数据库恢复 (推荐)")
+            st.markdown("""
+            1. **去云端下载**: 登录 Google Drive，进入 `家庭管理系统数据备份` 文件夹。
+            2. **找到文件**: 找到文件名为 `tasks.db` 的最新文件并下载。
+            3. **在此上传**: 使用下方控件上传。
+            """)
+            uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"], key="db_uploader_v85")
+            if uploaded_db:
+                st.warning("⚠️ 确认后将覆盖所有当前数据。")
+                if st.button("🔥 立即执行二进制恢复", key="btn_bin_restore", use_container_width=True):
+                    try:
+                        if not os.path.exists("data"): os.makedirs("data")
+                        with open(DB_FILE, "wb") as f:
+                            f.write(uploaded_db.getbuffer())
+                        st.success("✅ 恢复成功！")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"失败: {e}")
+
+        with recovery_tab2:
+            st.markdown("### 📝 文本报告紧急还原")
+            st.markdown("""
+            1. **去云端复制**: 登录 Google Drive 打开 `realtime_backup.txt`。
+            2. **全选复制**: 复制所有文本。
+            3. **在此粘贴**: 贴入下方文本框。
+            """)
+            report_text = st.text_area("粘贴备份报告全文", height=300, key="report_paste_85")
+            if st.button("🧩 解析并还原数据", key="btn_text_restore", use_container_width=True):
+                if report_text:
+                    try:
+                        import_count = import_from_report_text(report_text)
+                        st.success(f"✅ 解析完成！已还原 {import_count} 条数据。")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"解析失败: {e}")
+        
+        st.markdown("---")
+        st.markdown("### 🛡️ 系统状态监控")
+        st.write(f"**当前版本**: v{VERSION} | **数据库**: `{os.path.basename(DB_FILE)}`")
+        
+    else:
+        # --- 标准主控制台视图 ---
+        top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
     
     # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
     # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
@@ -1531,73 +1590,6 @@ try:
                         delete_enya_period(row['id'])
                         st.rerun()
                     st.divider()
-
-    with top_tab5:
-        st.markdown("## 🛡️ 数据救生艇：双重数据恢复指南")
-        st.info("💡 **核心理念**: 由于 Streamlit Cloud 容器是临时的，数据会定期清空。您有两条路径可以随时找回数据。")
-
-        # 路径 A: 二进制恢复
-        st.markdown("### 🧬 路径 A：二进制数据库恢复 (最推荐)")
-        with st.expander("📖 查看详细恢复步骤", expanded=True):
-            st.markdown("""
-            **适用场景**: 您需要 100% 完整恢复所有任务、财务、健康等细节。
-            
-            1. **去云端下载**: 登录您的 Google Drive，进入 `家庭管理系统数据备份` 文件夹。
-            2. **找到文件**: 找到文件名为 `tasks.db` 的文件（这是由系统实时同步更新的）。
-            3. **右键下载**: 将其下载到您的电脑本地。
-            4. **在此上传**: 使用下方的上传控件选中该文件。
-            5. **确认按钮**: 点击红色确认按钮。
-            """)
-            
-            uploaded_db = st.file_uploader("选择下载好的 tasks.db 文件", type=["db"], key="db_uploader")
-            if uploaded_db:
-                st.warning("⚠️ 检测到二进制文件，确认恢复后将覆盖当前所有数据。")
-                if st.button("🔥 立即执行二进制恢复", key="confirm_restore_btn", use_container_width=True):
-                    try:
-                        if not os.path.exists("data"): os.makedirs("data")
-                        with open(DB_FILE, "wb") as f:
-                            f.write(uploaded_db.getbuffer())
-                        st.success("✅ 数据库恢复成功！")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"恢复失败: {e}")
-
-        st.markdown("---")
-
-        # 路径 B: 文本报告恢复
-        st.markdown("### 📝 路径 B：文本报告紧急还原")
-        with st.expander("📖 查看详细恢复步骤"):
-            st.markdown("""
-            **适用场景**: `tasks.db` 丢失或无法使用，但您还能打开 Google Drive 里的备份报告。
-            
-            1. **去云端复制代码**: 登录 Google Drive。
-            2. **打开报告**: 打开 `realtime_backup.txt` 文本文件。
-            3. **全选复制**: 复制其中的所有文字内容。
-            4. **在此粘贴**: 将文字粘贴到下方的输入框中。
-            5. **执行导入**: 系统将自动通过正则表达式重新解析并注入数据库。
-            """)
-            
-            report_text = st.text_area("请将 realtime_backup.txt 的内容粘贴到此处", height=300, key="report_paste_area")
-            if st.button("🧩 开始从文本解析并还原", key="text_import_btn", use_container_width=True):
-                if report_text:
-                    try:
-                        import_count = import_from_report_text(report_text)
-                        st.success(f"✅ 解析成功！已成功从文本中还原了 {import_count} 条数据条目。")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"解析失败: 请确认粘贴的内容格式完整且属于 generate_master_report 生成的版本。❌ 错误: {e}")
-                else:
-                    st.warning("请先粘贴内容。")
-
-        st.markdown("---")
-        st.markdown("### 🛡️ 系统状态")
-        st.write(f"**系统版本**: v{VERSION}")
-        st.write(f"**数据库路径**: `{os.path.abspath(DB_FILE)}`")
-        st.write(f"**加密状态**: {'✅ 已启用' if db_enc_key else '⚠️ 未启用 (环境变量缺失)'}")
-
-
 
     st.markdown("---")
     st.markdown(f"<p style='text-align: center; color: #888;'>最后更新: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}</p>", unsafe_allow_html=True)
