@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7"
+VERSION = "9.7.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1660,13 +1660,14 @@ try:
                     with g_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px;'>{row['goal_value']}</div>", unsafe_allow_html=True)
                     
+                    def trigger_edit(r):
+                        st.session_state["goal_to_edit"] = r
+                        st.session_state["g_name_inp"] = r['goal_name']
+                        st.session_state["g_val_inp"] = r['goal_value']
+
                     with g_cols[2]:
-                        if st.button("✏️", key=f"edit_g_{row['id']}", help="修改此目标", use_container_width=True):
-                            st.session_state["goal_to_edit"] = row.to_dict()
-                            # 🛠️ 核心修复：手动同步值到 key 绑定的 session_state
-                            st.session_state["g_name_inp"] = row['goal_name']
-                            st.session_state["g_val_inp"] = row['goal_value']
-                            st.rerun()
+                        st.button("✏️", key=f"edit_g_{row['id']}", help="修改此目标", 
+                                  use_container_width=True, on_click=trigger_edit, args=(row.to_dict(),))
                     
                     with g_cols[3]:
                         if st.button("🗑️", key=f"del_g_{row['id']}", help="删除此目标", use_container_width=True):
