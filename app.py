@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.5"
+VERSION = "9.5.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1418,14 +1418,14 @@ try:
     else:
         # --- 标准主控制台视图 ---
         top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
-    
-    # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
-    # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
-    # but we can use st.session_state with anchor or just rely on the manual selection for now 
-    # as Streamlit tabs preserve state well. To force focus, we'd need a different approach, 
-    # but for now renaming and grouping is the priority.]
 
-    with top_tab1:
+        # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
+        # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
+        # but we can use st.session_state with anchor or just rely on the manual selection for now 
+        # as Streamlit tabs preserve state well. To force focus, we'd need a different approach, 
+        # but for now renaming and grouping is the priority.]
+
+        with top_tab1:
 
             def generate_txt_report():
                 # 为了保持 100% 一致，现在 Download 按钮直接调用统一的系统备份报告函数
@@ -1517,104 +1517,105 @@ try:
                         is_shade = bool(row.get('_is_shadow', False))
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
-    with top_tab2:
-        st.subheader('🎯 爸爸的健身目标')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('📅 健身计划')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('✅ 每次健身项目完成记录')
-        st.info('内容可以先为空，我后面会继续加入。')
+        with top_tab2:
+            st.subheader('🎯 爸爸的健身目标')
+            st.info('内容可以先为空，我后面会继续加入。')
+            st.subheader('📅 健身计划')
+            st.info('内容可以先为空，我后面会继续加入。')
+            st.subheader('✅ 每次健身项目完成记录')
+            st.info('内容可以先为空，我后面会继续加入。')
 
-    with top_tab3:
-        st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
-        
-        health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"])
-        
-        with health_sub1:
-            st.markdown("### 📊 新增记录")
-            cols_v = st.columns([0.3, 0.2, 0.2, 0.3], vertical_alignment="bottom")
-            with cols_v[0]:
-                v_date = st.date_input("日期", value=get_now_sgt().date(), key="v_date_inp")
-            with cols_v[1]:
-                v_height = st.number_input("身高 (cm)", min_value=0.0, step=0.1, key="v_height_inp")
-            with cols_v[2]:
-                v_weight = st.number_input("体重 (kg)", min_value=0.0, step=0.1, key="v_weight_inp")
-            with cols_v[3]:
-                if st.button("➕ 保存记录", use_container_width=True, key="v_save_btn"):
-                    add_enya_vital(v_date.strftime("%Y-%m-%d"), v_height, v_weight)
-                    st.success("记录已保存！")
-                    st.rerun()
-
-            st.markdown("---")
-            st.markdown("### 📜 历史记录")
-            vitals_df = get_enya_vitals()
-            if vitals_df.empty:
-                st.info("尚无身高体重记录。")
-            else:
-                # 使用 DataFrame 显示表格，带删除按钮
-                for idx, row in vitals_df.iterrows():
-                    v_cols = st.columns([0.25, 0.25, 0.25, 0.25])
-                    v_cols[0].write(row['record_date'])
-                    v_cols[1].write(f"{row['height']} cm")
-                    v_cols[2].write(f"{row['weight']} kg")
-                    if v_cols[3].button("🗑️", key=f"del_v_{row['id']}"):
-                        delete_enya_vital(row['id'])
+        with top_tab3:
+            st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
+            
+            health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"])
+            
+            with health_sub1:
+                st.markdown("### 📊 新增记录")
+                cols_v = st.columns([0.3, 0.2, 0.2, 0.3], vertical_alignment="bottom")
+                with cols_v[0]:
+                    v_date = st.date_input("日期", value=get_now_sgt().date(), key="v_date_inp")
+                with cols_v[1]:
+                    v_height = st.number_input("身高 (cm)", min_value=0.0, step=0.1, key="v_height_inp")
+                with cols_v[2]:
+                    v_weight = st.number_input("体重 (kg)", min_value=0.0, step=0.1, key="v_weight_inp")
+                with cols_v[3]:
+                    if st.button("➕ 保存记录", use_container_width=True, key="v_save_btn"):
+                        add_enya_vital(v_date.strftime("%Y-%m-%d"), v_height, v_weight)
+                        st.success("记录已保存！")
                         st.rerun()
-                    st.divider()
 
-        with health_sub2:
-            st.markdown("### 🩸 新增经期记录")
-            cols_p = st.columns([0.3, 0.4, 0.3], vertical_alignment="bottom")
-            with cols_p[0]:
-                p_date = st.date_input("日期", value=get_now_sgt().date(), key="p_date_inp")
-            with cols_p[1]:
-                p_type = st.selectbox("事件内容", ["月经开始", "月经结束"], key="p_type_inp")
-            with cols_p[2]:
-                if st.button("➕ 保存记录", use_container_width=True, key="p_save_btn"):
-                    add_enya_period(p_date.strftime("%Y-%m-%d"), p_type)
-                    st.success("记录已保存！")
-                    st.rerun()
+                st.markdown("---")
+                st.markdown("### 📜 历史记录")
+                vitals_df = get_enya_vitals()
+                if vitals_df.empty:
+                    st.info("尚无身高体重记录。")
+                else:
+                    # 使用 DataFrame 显示表格，带删除按钮
+                    for idx, row in vitals_df.iterrows():
+                        v_cols = st.columns([0.25, 0.25, 0.25, 0.25])
+                        v_cols[0].write(row['record_date'])
+                        v_cols[1].write(f"{row['height']} cm")
+                        v_cols[2].write(f"{row['weight']} kg")
+                        if v_cols[3].button("🗑️", key=f"del_v_{row['id']}"):
+                            delete_enya_vital(row['id'])
+                            st.rerun()
+                        st.divider()
 
-            def generate_period_report(df):
-                if df.empty: return "尚无经期记录。"
-                lines = ["🌸 恩雅的经期健康记录报告\n", "=" * 40 + "\n\n"]
-                lines.append(f"{'日期':<15} | {'事件内容':<20}\n")
-                lines.append("-" * 40 + "\n")
-                for _, row in df.iterrows():
-                    lines.append(f"{row['record_date']:<15} | {row['event_type']:<20}\n")
-                lines.append("\n" + "=" * 40 + "\n")
-                lines.append(f"导出时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
-                return "".join(lines)
-
-            st.markdown("---")
-            periods_df = get_enya_periods()
-            p_head_col1, p_head_col2 = st.columns([0.7, 0.3], vertical_alignment="center")
-            with p_head_col1:
-                st.markdown("### 📜 经期历史记录")
-            with p_head_col2:
-                if not periods_df.empty:
-                    p_txt = generate_period_report(periods_df)
-                    st.download_button(
-                        label="📥 下载经期记录",
-                        data=p_txt,
-                        file_name=f"恩雅经期记录_{get_now_sgt().strftime('%m%d')}.txt",
-                        mime="text/plain",
-                        use_container_width=True,
-                        key="dl_period_btn"
-                    )
-
-            if periods_df.empty:
-                st.info("尚无月经记录。")
-            else:
-                for idx, row in periods_df.iterrows():
-                    p_cols = st.columns([0.3, 0.4, 0.3])
-                    p_cols[0].write(row['record_date'])
-                    p_color = "#e11d48" if row['event_type'] == "月经开始" else "#059669"
-                    p_cols[1].markdown(f"**<span style='color: {p_color};'>{row['event_type']}</span>**", unsafe_allow_html=True)
-                    if p_cols[2].button("🗑️", key=f"del_p_{row['id']}"):
-                        delete_enya_period(row['id'])
+            with health_sub2:
+                st.markdown("### 🩸 新增经期记录")
+                cols_p = st.columns([0.3, 0.4, 0.3], vertical_alignment="bottom")
+                with cols_p[0]:
+                    p_date = st.date_input("日期", value=get_now_sgt().date(), key="p_date_inp")
+                with cols_p[1]:
+                    p_type = st.selectbox("事件内容", ["月经开始", "月经结束"], key="p_type_inp")
+                with cols_p[2]:
+                    if st.button("➕ 保存记录", use_container_width=True, key="p_save_btn"):
+                        add_enya_period(p_date.strftime("%Y-%m-%d"), p_type)
+                        st.success("记录已保存！")
                         st.rerun()
-                    st.divider()
+
+                def generate_period_report(df):
+                    if df.empty: return "尚无经期记录。"
+                    lines = ["🌸 恩雅的经期健康记录报告\n", "=" * 40 + "\n\n"]
+                    lines.append(f"{'日期':<15} | {'事件内容':<20}\n")
+                    lines.append("-" * 40 + "\n")
+                    for _, row in df.iterrows():
+                        lines.append(f"{row['record_date']:<15} | {row['event_type']:<20}\n")
+                    lines.append("\n" + "=" * 40 + "\n")
+                    lines.append(f"导出时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}")
+                    return "".join(lines)
+
+                st.markdown("---")
+                periods_df = get_enya_periods()
+                p_head_col1, p_head_col2 = st.columns([0.7, 0.3], vertical_alignment="center")
+                with p_head_col1:
+                    st.markdown("### 📜 经期历史记录")
+                with p_head_col2:
+                    if not periods_df.empty:
+                        p_txt = generate_period_report(periods_df)
+                        st.download_button(
+                            label="📥 下载经期记录",
+                            data=p_txt,
+                            file_name=f"恩雅经期记录_{get_now_sgt().strftime('%m%d')}.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key="dl_period_btn"
+                        )
+
+                if periods_df.empty:
+                    st.info("尚无月经记录。")
+                else:
+                    for idx, row in periods_df.iterrows():
+                        p_cols = st.columns([0.3, 0.4, 0.3])
+                        p_cols[0].write(row['record_date'])
+                        p_color = "#e11d48" if row['event_type'] == "月经开始" else "#059669"
+                        p_cols[1].markdown(f"**<span style='color: {p_color};'>{row['event_type']}</span>**", unsafe_allow_html=True)
+                        if p_cols[2].button("🗑️", key=f"del_p_{row['id']}"):
+                            delete_enya_period(row['id'])
+                            st.rerun()
+                        st.divider()
+
 
     st.markdown("---")
     st.markdown(f"<p style='text-align: center; color: #888;'>最后更新: {get_now_sgt().strftime('%Y-%m-%d %H:%M')}</p>", unsafe_allow_html=True)
