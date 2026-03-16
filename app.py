@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.1"
+VERSION = "8.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -503,6 +503,64 @@ def delete_enya_period(period_id):
     conn.commit()
     conn.close()
     trigger_realtime_backup()
+
+def import_from_report_text(report_text):
+    """
+    v8.2 - 文本灾备还原引擎
+    解析 generate_master_report 生成的文本格式，并注入数据库
+    """
+    import re
+    # 正则规则与报告格式 1:1 对位
+    task_pattern = re.compile(r"^\[[! ]|∞\] (.*?) \(截止: (.*?)\)$") 
+    # v6.6+ 采用的是表格形式，需支持管道符解析
+    table_row_pattern = re.compile(r"^([0-9- :]{10,16}|无设定)\s*\|\s*(.*?)\s*\|\s*(.*)$")
+    period_pattern = re.compile(r"^- (\d{4}-\d{2}-\d{2}): (月经开始|月经结束)$")
+    vital_pattern = re.compile(r"^- (\d{4}-\d{2}-\d{2}): 身高 (.*?)cm \| 体重 (.*?)kg$")
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    # 简单清空相关表以防冲突
+    c.execute("DELETE FROM tasks")
+    c.execute("DELETE FROM enya_vitals")
+    c.execute("DELETE FROM enya_period")
+    
+    lines = [l.strip() for l in report_text.split('\n') if l.strip()]
+    count = 0
+    
+    for line in lines:
+        # 1. 解析表格行 (任务)
+        m_task = table_row_pattern.match(line)
+        if m_task and "任务内容" not in line and "截止时间" not in line and "---" not in line:
+            due, task_name, recur = m_task.groups()
+            if "(暂无事项)" in due: continue
+            due_val = None if due == "无设定" else due
+            recur_val = None if recur == "无" else recur
+            c.execute("INSERT INTO tasks (task, due_date, recurring_pattern) VALUES (?, ?, ?)",
+                      (encrypt_str(task_name), due_val, recur_val))
+            count += 1
+            continue
+            
+        # 2. 解析经期
+        m_period = period_pattern.match(line)
+        if m_period:
+            date_p, event_p = m_period.groups()
+            c.execute("INSERT INTO enya_period (record_date, event_type) VALUES (?, ?)", (date_p, encrypt_str(event_p)))
+            count += 1
+            continue
+            
+        # 3. 解析身高体重
+        m_vital = vital_pattern.match(line)
+        if m_vital:
+            date_v, h_v, w_v = m_vital.groups()
+            c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", 
+                      (date_v, encrypt_str(h_v), encrypt_str(w_v)))
+            count += 1
+            continue
+
+    conn.commit()
+    conn.close()
+    return count
 
 # --- 5. Integrated Master Report & Auto-Backup Logic ---
 def get_categorized_tasks():
@@ -1449,25 +1507,63 @@ try:
                     st.divider()
 
     with top_tab5:
-        st.markdown("## ⚙️ 数据恢复")
-        st.info("⚠️ **注意**: Streamlit Cloud 容器是临时性的。每次重启或更新代码，本地数据库 `tasks.db` 都会被重置。请使用下方的上传功能恢复数据。")
-        
-        st.markdown("### 📤 数据恢复 (上传)")
-        st.write("如果您在本地有 `tasks.db` 文件，请在此上传以恢复数据。")
-        uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"], key="db_uploader")
-        if uploaded_db:
-            st.warning("⚠️ 检测到待恢复文件，请点击下方按钮确认操作。")
-            if st.button("🔥 确认恢复数据库", key="confirm_restore_btn", use_container_width=True):
-                try:
-                    # 确保目录存在
-                    if not os.path.exists("data"): os.makedirs("data")
-                    with open(DB_FILE, "wb") as f:
-                        f.write(uploaded_db.getbuffer())
-                    st.success("✅ 数据库恢复成功！正在重新加载...")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"恢复失败: {e}")
+        st.markdown("## 🛡️ 数据救生艇：双重数据恢复指南")
+        st.info("💡 **核心理念**: 由于 Streamlit Cloud 容器是临时的，数据会定期清空。您有两条路径可以随时找回数据。")
+
+        # 路径 A: 二进制恢复
+        st.markdown("### 🧬 路径 A：二进制数据库恢复 (最推荐)")
+        with st.expander("📖 查看详细恢复步骤", expanded=True):
+            st.markdown("""
+            **适用场景**: 您需要 100% 完整恢复所有任务、财务、健康等细节。
+            
+            1. **去云端下载**: 登录您的 Google Drive，进入 `家庭管理系统数据备份` 文件夹。
+            2. **找到文件**: 找到文件名为 `tasks.db` 的文件（这是由系统实时同步更新的）。
+            3. **右键下载**: 将其下载到您的电脑本地。
+            4. **在此上传**: 使用下方的上传控件选中该文件。
+            5. **确认按钮**: 点击红色确认按钮。
+            """)
+            
+            uploaded_db = st.file_uploader("选择下载好的 tasks.db 文件", type=["db"], key="db_uploader")
+            if uploaded_db:
+                st.warning("⚠️ 检测到二进制文件，确认恢复后将覆盖当前所有数据。")
+                if st.button("🔥 立即执行二进制恢复", key="confirm_restore_btn", use_container_width=True):
+                    try:
+                        if not os.path.exists("data"): os.makedirs("data")
+                        with open(DB_FILE, "wb") as f:
+                            f.write(uploaded_db.getbuffer())
+                        st.success("✅ 数据库恢复成功！")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"恢复失败: {e}")
+
+        st.markdown("---")
+
+        # 路径 B: 文本报告恢复
+        st.markdown("### 📝 路径 B：文本报告紧急还原")
+        with st.expander("📖 查看详细恢复步骤"):
+            st.markdown("""
+            **适用场景**: `tasks.db` 丢失或无法使用，但您还能打开 Google Drive 里的备份报告。
+            
+            1. **去云端复制代码**: 登录 Google Drive。
+            2. **打开报告**: 打开 `realtime_backup.txt` 文本文件。
+            3. **全选复制**: 复制其中的所有文字内容。
+            4. **在此粘贴**: 将文字粘贴到下方的输入框中。
+            5. **执行导入**: 系统将自动通过正则表达式重新解析并注入数据库。
+            """)
+            
+            report_text = st.text_area("请将 realtime_backup.txt 的内容粘贴到此处", height=300, key="report_paste_area")
+            if st.button("🧩 开始从文本解析并还原", key="text_import_btn", use_container_width=True):
+                if report_text:
+                    try:
+                        import_count = import_from_report_text(report_text)
+                        st.success(f"✅ 解析成功！已成功从文本中还原了 {import_count} 条数据条目。")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"解析失败: 请确认粘贴的内容格式完整且属于 generate_master_report 生成的版本。❌ 错误: {e}")
+                else:
+                    st.warning("请先粘贴内容。")
 
         st.markdown("---")
         st.markdown("### 🛡️ 系统状态")
