@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "6.9"
+VERSION = "7.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -88,7 +88,7 @@ if not os.path.exists("data"):
 DB_FILE = "data/tasks.db"
 
 # --- 4. Google Drive Backup Engine (via Apps Script Bridge) ---
-def backup_to_gdrive(content_str, filename):
+def backup_to_gdrive(content_str, filename, overwrite=False):
     # 清理 URL (防止 .env 里的引号或空格干扰)
     url = g_script_url.strip("'\" ") if g_script_url else None
     
@@ -98,7 +98,8 @@ def backup_to_gdrive(content_str, filename):
     try:
         payload = {
             "filename": filename,
-            "content": content_str
+            "content": content_str,
+            "overwrite": overwrite  # v7.0 新增标识，请求 Google 脚本执行覆盖操作
         }
         # Google Script 会进行 302 重定向，requests 默认会自动跟随
         response = requests.post(url, json=payload, timeout=30, allow_redirects=True)
@@ -117,14 +118,14 @@ def backup_to_gdrive(content_str, filename):
 
 def trigger_realtime_backup():
     """
-    v6.9 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
-    每当数据库发生变动（增、删、改），自动后台异步同步全量数据到云端 realtime_backup.txt。
+    v7.0 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
+    每当数据库发生变动（增、删、改），自动后台异步同步全量数据，并强制覆盖 realtime_backup.txt。
     """
     def _async_backup():
         try:
             content = generate_master_report()
-            # 强制备份到指定名称，实现实时同步
-            backup_to_gdrive(content, "realtime_backup.txt")
+            # v7.0 强制执行覆盖操作，确保 Google Drive 只有一份最新的 realtime_backup.txt
+            backup_to_gdrive(content, "realtime_backup.txt", overwrite=True)
         except:
             pass # 后台备份失败不影响主应用
     threading.Thread(target=_async_backup, daemon=True).start()
