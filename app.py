@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.8"
+VERSION = "9.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -812,8 +812,10 @@ def generate_master_report():
     add_table_sec("🔄 长期循环事项", data["recurring_list"])
     add_table_sec("✅ 已完成事项归档", data["completed_tasks"])
     
-    # 健康记录 (保持一致性但格式微调)
-    lines.append(f"\n\n\n【 📏 恩雅的身高体重记录 】\n")
+    # --- 🌸 恩雅的健康档案 (v9.8 明确分类) ---
+    lines.append(f"\n\n{'='*30} 🌸 恩雅的健康档案 {'='*30}\n")
+    
+    lines.append(f"\n【 📏 身高体重记录 】\n")
     v_df = get_enya_vitals()
     if not v_df.empty:
         for _, r in v_df.iterrows():
@@ -821,7 +823,7 @@ def generate_master_report():
     else:
         lines.append("尚无记录。\n")
 
-    lines.append("\n【 📅 恩雅的经期记录 】\n")
+    lines.append("\n【 📅 经期记录 】\n")
     p_df = get_enya_periods()
     if not p_df.empty:
         for _, r in p_df.iterrows():
@@ -829,13 +831,19 @@ def generate_master_report():
     else:
         lines.append("尚无记录。\n")
 
-    lines.append("\n【 🏋️‍♂️ 健身目标（同龄人10%） 】\n")
+    # --- 🏋️‍♂️ 爸爸的健身档案 (v9.8 明确分类) ---
+    lines.append(f"\n\n{'='*30} 🏋️‍♂️ 爸爸的健身档案 {'='*30}\n")
+    
+    lines.append("\n【 🎯 健身目标（同龄人10%） 】\n")
     g_df = get_dad_fitness_goals()
     if not g_df.empty:
         for _, r in g_df.iterrows():
             lines.append(f"- {r['goal_name']}: {r['goal_value']}\n")
     else:
         lines.append("尚无记录。\n")
+    
+    lines.append("\n【 📅 健身计划 】\n- (暂无详细记录，待后续添加)\n")
+    lines.append("\n【 ✅ 健身项目完成记录 】\n- (暂无详细记录，待后续添加)\n")
 
     lines.append(f"\n\n{'='*80}\n备份时间: {now_sgt.strftime('%Y-%m-%d %H:%M:%S')}\n(v{VERSION})")
     return "".join(lines)
