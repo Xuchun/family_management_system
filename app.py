@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.8"
+VERSION = "8.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1333,7 +1333,7 @@ try:
         
     else:
         # --- 标准主控制台视图 ---
-        top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
+        top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
     
     # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
     # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
@@ -1434,12 +1434,6 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
     with top_tab2:
-        st.subheader('💵 当前家庭财务一览')
-        st.info('内容可以先为空，我后面会继续加入。')
-        st.subheader('📈 投资一览表')
-        st.info('内容可以先为空，我后面会继续加入。')
-
-    with top_tab3:
         st.subheader('🎯 爸爸的健身目标')
         st.info('内容可以先为空，我后面会继续加入。')
         st.subheader('📅 健身计划')
@@ -1447,7 +1441,7 @@ try:
         st.subheader('✅ 每次健身项目完成记录')
         st.info('内容可以先为空，我后面会继续加入。')
 
-    with top_tab4:
+    with top_tab3:
         st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
         
         health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"])
