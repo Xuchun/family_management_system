@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.6"
+VERSION = "8.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -756,70 +756,16 @@ def generate_master_report():
 
 def run_auto_backup_logic(silent=True):
     """
-    检查是否需要自动备份 (中午 12 点和凌晨 1 点)
-    现在支持：Lazy Trigger (用户访问) 和 Background Daemon (自动执行)
+    (v8.7 已禁用) 原定于中午 12 点和凌晨 1 点的自动备份已移除。
     """
-    try:
-        now = get_now_sgt()
-        current_date = now.strftime("%Y-%m-%d")
-        current_hour = now.hour
-        
-        target_slot = None
-        if current_hour == 1:
-            target_slot = "01am"
-        elif current_hour == 12:
-            target_slot = "12pm"
-        
-        if target_slot:
-            slot_key = f"last_auto_backup_{target_slot}"
-            
-            # 独立连接数据库，确保线程安全
-            with sqlite3.connect(DB_FILE) as conn:
-                c = conn.cursor()
-                c.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, val TEXT)")
-                c.execute("SELECT val FROM system_config WHERE key = ?", (slot_key,))
-                res = c.fetchone()
-                last_date = res[0] if res else ""
-                
-                if last_date != current_date:
-                    content = generate_master_report()
-                    timestamp = now.strftime("%Y%m%d_%H%M")
-                    filename = f"Family_Backup_{timestamp}.txt"
-                    success, msg = backup_to_gdrive(content, filename)
-                    
-                    if success:
-                        c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
-                        conn.commit()
-                        if not silent:
-                            st.session_state[f"auto_backup_msg_{target_slot}"] = f"系统已自动完成 {target_slot} 云端同步。"
-    except Exception as e:
-        if not silent:
-            print(f"自动备份后台错误: {e}")
+    pass
 
-def autonomous_backup_daemon():
-    """后台永驻守护线程：每 30 秒巡检一次时间"""
-    # 稍微延迟启动，等待主进程稳定
-    time.sleep(10)
-    while True:
-        try:
-            now = get_now_sgt()
-            # 只有在整点的分钟内才尝试触发
-            if (now.hour == 1 or now.hour == 12) and now.minute == 0:
-                run_auto_backup_logic(silent=True)
-                time.sleep(61) # 跨过这一分钟
-            else:
-                time.sleep(30)
-        except:
-            time.sleep(60)
-
-# --- 🎯 线程启动器 (确保全域唯一) ---
-import threading
-if "daemon_started" not in st.session_state:
-    # 在有些环境下 session_state 会重置，我们通过 Python 全局变量做二次锁定
-    if not any(t.name == "FamilyBackupDaemon" for t in threading.enumerate()):
-        daemon = threading.Thread(target=autonomous_backup_daemon, name="FamilyBackupDaemon", daemon=True)
-        daemon.start()
-        st.session_state["daemon_started"] = True
+# --- 🎯 线程启动器 (v8.7 已禁用自动守护线程) ---
+# if "daemon_started" not in st.session_state:
+#     if not any(t.name == "FamilyBackupDaemon" for t in threading.enumerate()):
+#         daemon = threading.Thread(target=autonomous_backup_daemon, name="FamilyBackupDaemon", daemon=True)
+#         daemon.start()
+#         st.session_state["daemon_started"] = True
 
 
 # --- 5. UI Styling ---
@@ -1289,17 +1235,10 @@ try:
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
-        # 如果刚才触发了自动备份，给予一个小提示
-        for slot in ["01am", "12pm"]:
-            msg_key = f"auto_backup_msg_{slot}"
-            if msg_key in st.session_state:
-                st.toast(st.session_state.pop(msg_key), icon="🤖")
 
     with c_menu:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
-            st.markdown("### 🛠️ 快速操作")
-            
             # 1. 云端同步 (实时)
             if st.button("☁️ 立即云端同步", use_container_width=True, help="同时同步文本报告和数据库"):
                 with st.spinner("同步中..."):
