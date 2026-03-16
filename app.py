@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.7"
+VERSION = "9.7.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -829,7 +829,7 @@ def generate_master_report():
     else:
         lines.append("尚无记录。\n")
 
-    lines.append("\n【 🏋️‍♂️ 健身目标 】\n")
+    lines.append("\n【 🏋️‍♂️ 健身目标（同龄人10%） 】\n")
     g_df = get_dad_fitness_goals()
     if not g_df.empty:
         for _, r in g_df.iterrows():
@@ -1588,7 +1588,7 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         with top_tab2:
-            st.subheader('🎯 健身目标')
+            st.subheader('🎯 健身目标（同龄人10%）')
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
             goal_to_edit = st.session_state.get("goal_to_edit", None)
