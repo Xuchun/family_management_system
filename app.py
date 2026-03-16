@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.1"
+VERSION = "9.7.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1597,33 +1597,48 @@ try:
             g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
             g_val = cols_g[1].text_input("目标数值/区间", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), placeholder="如：65-67公斤", key="g_val_inp")
             
+            # 🛠️ v9.7.2 核心修复：定义所有操作的回调函数
+            def handle_add():
+                name = st.session_state.get("g_name_inp", "").strip()
+                val = st.session_state.get("g_val_inp", "").strip()
+                if name and val:
+                    if add_dad_fitness_goal(name, val):
+                        st.session_state["g_name_inp"] = ""
+                        st.session_state["g_val_inp"] = ""
+                        st.session_state["_fitness_msg"] = ("toast", "✅ 已添加新目标！")
+                else:
+                    st.session_state["_fitness_msg"] = ("warning", "⚠️ 请输入完整的目标名称和数值")
+
+            def handle_update(gid):
+                name = st.session_state.get("g_name_inp", "").strip()
+                val = st.session_state.get("g_val_inp", "").strip()
+                if name and val:
+                    if update_dad_fitness_goal(gid, name, val):
+                        st.session_state.pop("goal_to_edit", None)
+                        st.session_state["g_name_inp"] = ""
+                        st.session_state["g_val_inp"] = ""
+                        st.session_state["_fitness_msg"] = ("success", "已更新！")
+                else:
+                    st.session_state["_fitness_msg"] = ("warning", "请填完信息")
+
+            def handle_cancel():
+                st.session_state.pop("goal_to_edit", None)
+                st.session_state["g_name_inp"] = ""
+                st.session_state["g_val_inp"] = ""
+
             if goal_to_edit:
-                if cols_g[2].button("💾 更新", use_container_width=True, type="primary"):
-                    if g_name and g_val:
-                        if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
-                            if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
-                            st.session_state["g_name_inp"] = ""
-                            st.session_state["g_val_inp"] = ""
-                            st.success("已更新！")
-                            time.sleep(0.5)
-                            st.rerun()
-                    else: st.warning("请填完信息")
-                if st.button("取消修改", key="cancel_edit_goal"):
-                    if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
-                    st.session_state["g_name_inp"] = ""
-                    st.session_state["g_val_inp"] = ""
-                    st.rerun()
+                cols_g[2].button("💾 更新", use_container_width=True, type="primary", 
+                                on_click=handle_update, args=(goal_to_edit['id'],))
+                st.button("取消修改", key="cancel_edit_goal", on_click=handle_cancel)
             else:
-                if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
-                    if g_name and g_val:
-                        if add_dad_fitness_goal(g_name, g_val):
-                            st.session_state["g_name_inp"] = ""
-                            st.session_state["g_val_inp"] = ""
-                            st.toast("✅ 已添加新目标！", icon="✨")
-                            time.sleep(0.5)
-                            st.rerun()
-                    else:
-                        st.warning("⚠️ 请输入完整的目标名称和数值")
+                cols_g[2].button("➕ 添加", use_container_width=True, type="primary", on_click=handle_add)
+
+            # 显示回调中产生的消息
+            if "_fitness_msg" in st.session_state:
+                msg_type, msg_text = st.session_state.pop("_fitness_msg")
+                if msg_type == "toast": st.toast(msg_text, icon="✨")
+                elif msg_type == "success": st.success(msg_text)
+                elif msg_type == "warning": st.warning(msg_text)
 
             st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_allow_html=True)
             
