@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.5"
+VERSION = "9.7.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1612,6 +1612,7 @@ try:
                         st.session_state["g_name_inp"] = ""
                         st.session_state["g_val_inp"] = ""
                         st.session_state["_fitness_msg"] = ("toast", "✅ 已添加新目标！")
+                        trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                 else:
                     st.session_state["_fitness_msg"] = ("warning", "⚠️ 请输入完整的目标名称和数值")
 
@@ -1624,6 +1625,7 @@ try:
                         st.session_state["g_name_inp"] = ""
                         st.session_state["g_val_inp"] = ""
                         st.session_state["_fitness_msg"] = ("success", "已更新！")
+                        trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                 else:
                     st.session_state["_fitness_msg"] = ("warning", "请填完信息")
 
@@ -1702,6 +1704,7 @@ try:
                     with g_cols[3]:
                         if st.button("🗑️", key=f"del_g_{row['id']}", help="删除此目标", use_container_width=True):
                             if delete_dad_fitness_goal(row['id']):
+                                trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                                 st.rerun()
 
             st.subheader('📅 健身计划')
