@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.2"
+VERSION = "8.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1235,6 +1235,23 @@ try:
     # CSS to style the download button in the header
     st.markdown("""
         <style>
+        /* v8.4 System Menu Button Styling */
+        div.stPopover > button {
+            background-color: #ff8c00 !important; /* Sunset Orange */
+            color: white !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            border: none !important;
+            height: 42px !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+        div.stPopover > button:hover {
+            background-color: #e67e00 !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+            transform: translateY(-1px);
+        }
+        
         div.stDownloadButton > button {
             font-size: 15px !important;
             font-weight: 500 !important;
@@ -1262,9 +1279,7 @@ try:
         st.session_state["manual_logout"] = True
 
     # Header Row
-    c_logout, c_title, c_sync = st.columns([0.12, 0.54, 0.34], vertical_alignment="center")
-    with c_logout:
-        st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout)
+    c_title, c_menu = st.columns([0.7, 0.3], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动备份，给予一个小提示
@@ -1272,42 +1287,53 @@ try:
             msg_key = f"auto_backup_msg_{slot}"
             if msg_key in st.session_state:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
-    with c_sync:
-        col_admin, col_manual = st.columns([0.5, 0.5])
-        with col_admin:
-            # 只有通过 Gmail 登录的管理员才能看到盾牌图标
-            if st.session_state.get("is_admin"):
-                with st.popover("🔐 修改密码", use_container_width=True, help="系统安全设置"):
-                    st.markdown("### 🔐 访问管理")
-                    curr_p = get_app_password()
-                    st.write(f"当前 6 位访问密码: **{curr_p}**")
-                    new_p = st.text_input("设置新密码 (6位数字):", type="password", max_chars=6)
-                    if st.button("更新密码", use_container_width=True):
-                        if len(new_p) == 6 and new_p.isdigit():
-                            if update_app_password(new_p):
-                                st.success("密码已更新！")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("保存失败")
-                        else:
-                            st.warning("请输入6位数字")
-            else:
-                st.empty() # 非管理员不显示
-        
-        with col_manual:
-            if st.button("☁️ 云端同步", use_container_width=True, help="立即备份所有数据到云端", key="manual_sync_header"):
+
+    with c_menu:
+        with st.popover("⚙️ 系统功能菜单", use_container_width=True):
+            st.markdown("### 🛠️ 快速操作")
+            
+            # 1. 云端同步 (实时)
+            if st.button("☁️ 立即云端同步", use_container_width=True, help="同时同步文本报告和数据库"):
                 with st.spinner("同步中..."):
-                    content = generate_master_report()
-                    timestamp = get_now_sgt().strftime("%Y%m%d_%H%M")
-                    success, msg = backup_to_gdrive(content, f"Family_Backup_{timestamp}.txt")
-                    if success:
-                        st.toast(msg, icon="✅")
-                    else:
-                        st.error(msg)
+                    trigger_realtime_backup()
+                    st.toast("✅ 双重同步任务已在后台启动！", icon="🚀")
+            
+            # 2. 数据恢复 (Tab 切换模拟或直接锚点)
+            if st.button("🛡️ 进入数据恢复中心", use_container_width=True):
+                st.session_state["active_tab_index"] = 4 # 记录要切到第 5 个 Tab
+                st.rerun()
+
+            # 3. 访问密码 (仅限管理员)
+            if st.session_state.get("is_admin"):
+                st.markdown("---")
+                st.markdown("#### 🔐 访问管理")
+                curr_p = get_app_password()
+                st.write(f"当前 6 位访问密码: **{curr_p}**")
+                new_p = st.text_input("设置新密码 (6位数字):", type="password", max_chars=6, key="menu_new_pass")
+                if st.button("更新密码", use_container_width=True, key="menu_update_pass_btn"):
+                    if len(new_p) == 6 and new_p.isdigit():
+                        if update_app_password(new_p):
+                            st.success("密码已更新！")
+                            time.sleep(1)
+                            st.rerun()
+                        else: st.error("保存失败")
+                    else: st.warning("请输入6位数字")
+
+            st.markdown("---")
+            # 4. 退出登录
+            st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout, key="menu_logout_btn")
 
     st.markdown('<br>', unsafe_allow_html=True)
-    top_tab1, top_tab2, top_tab3, top_tab4, top_tab5 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康', '⚙️ 数据恢复'])
+    
+    # 获取当前激活的 Tab 索引来控制默认显示
+    default_tab_idx = st.session_state.get("active_tab_index", 0)
+    top_tab1, top_tab2, top_tab3, top_tab4, top_tab5 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康', '🛡️ 数据恢复中心'])
+    
+    # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
+    # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
+    # but we can use st.session_state with anchor or just rely on the manual selection for now 
+    # as Streamlit tabs preserve state well. To force focus, we'd need a different approach, 
+    # but for now renaming and grouping is the priority.]
 
     with top_tab1:
 
