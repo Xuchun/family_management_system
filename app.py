@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "10.2"
+VERSION = "10.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1835,6 +1835,7 @@ try:
                 st.session_state["d_content_inp"] = ""
 
             with cols_d_inp[2]:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True) # 🛠️ v10.3 占位符，使按钮与输入框对齐
                 if diet_to_edit:
                     st.button("💾 更新", key="diet_update_btn", use_container_width=True, on_click=handle_diet_update, args=(diet_to_edit['id'],))
                     st.button("取消", key="diet_cancel_btn", on_click=handle_diet_cancel)
