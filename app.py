@@ -1444,10 +1444,11 @@ try:
         
         with m_col1:
             st.markdown("### 📤 数据恢复 (上传)")
-            st.write("如果您在本地有 `tasks.db` 文件，或者刚从旧容器下载了备份，请在此上传以恢复数据。")
-            uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"])
-            if uploaded_db is not None:
-                if st.button("🔥 确认恢复数据库", type="primary", use_container_width=True):
+            st.write("如果您在本地有 `tasks.db` 文件，请在此上传以恢复数据。")
+            uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"], key="db_uploader")
+            if uploaded_db:
+                st.warning("⚠️ 检测到待恢复文件，请点击下方按钮确认操作。")
+                if st.button("🔥 确认恢复数据库", key="confirm_restore_btn", use_container_width=True):
                     try:
                         # 确保目录存在
                         if not os.path.exists("data"): os.makedirs("data")
