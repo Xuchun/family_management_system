@@ -15,7 +15,9 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "5.5"
+import re
+
+VERSION = "6.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -56,7 +58,9 @@ except Exception:
     db_enc_key = os.getenv("DB_ENCRYPTION_KEY")
 
 # --- 🔐 Encryption Logic ---
-cipher_suite = Fernet(db_enc_key.encode()) if db_enc_key else None
+# 确保密钥清理掉可能的换行符或空格
+db_enc_key_clean = db_enc_key.strip("'\" ") if db_enc_key else None
+cipher_suite = Fernet(db_enc_key_clean.encode()) if db_enc_key_clean else None
 
 def encrypt_str(plain_text):
     if not cipher_suite or not plain_text: return plain_text
@@ -223,54 +227,104 @@ def update_app_password(new_pwd):
         return False
 
 def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
-    if not client: return task_text, fallback_date, fallback_recur
+    """
+    v6.4 - 绝对原文保全引擎 (Immutable Tail Protocol)
+    规则：第一个逗号之后的所有字符，均视为“神圣原文”，AI 绝对无法触碰。
+    """
+    if not client or not task_text or not task_text.strip():
+        return task_text, fallback_date, fallback_recur
+        
     now = get_now_sgt()
     f_date = fallback_date if fallback_date else now.strftime("%Y-%m-%d 23:59")
     f_recur = fallback_recur if fallback_recur else "None"
     
+    # 🕵️‍♂️ 第1步：物理级分流 (Python 层级执行，不可逾越)
+    # 查找首个逗号（半角或全角）
+    idx_en = task_text.find(',')
+    idx_cn = task_text.find('，')
+    
+    if idx_en != -1 and idx_cn != -1:
+        idx = min(idx_en, idx_cn)
+    else:
+        idx = idx_en if idx_en != -1 else idx_cn
+        
+    has_comma = (idx != -1)
+    
+    if has_comma:
+        head_orig = task_text[:idx]
+        # ⚠️ 这里是核心：tail_verbatim 包含了逗号及其后的所有原始字符，字迹完全锁定
+        tail_verbatim = task_text[idx:] 
+    else:
+        head_orig = task_text
+        tail_verbatim = ""
+
     try:
-        response = client.chat.completions.create(
+        # --- 任务 A: 调度解析 (AI 需感知全文以确定时间) ---
+        prompt_info = f"""
+        你是精密调度器。今天是 {now.strftime('%Y-%m-%d')}。
+        请从全文中分析截止日期和循环模式。
+        全文："{task_text}"
+        备选值：date={f_date}, recur={f_recur}
+        返回 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "..." }}
+        """
+        res_info = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": f"""你是家庭AI助手。今天是 {now.strftime('%Y-%m-%d')} ({now.strftime('%A')})。
-                你的职能：解析时间意图，并清理任务描述。
-                
-                ⚠️ 极其重要严格指令：
-                1. CLEAN_TASK: 请从原始文本中**彻底移除**所有时间词汇（例如：“今晚6点”、“明天”、“下周二”、“后天中午”等）。
-                2. 严禁改动：除了删除时间词，绝对不允许修改、简化、润色、总结或翻译用户的任何其他文字。用户输入的长难句必须高保全。
-                3. DATE: 截止日期时间格式 'YYYY-MM-DD HH:MM'。若文本中未提到新的时间意图，请务必返回原始值：{f_date}。
-                4. RECUR: 循环模式(Monday, Everyday, Weekend, Monthly-15等)或 None。若文本中未提到新的循环意图，请务必返回原始值：{f_recur}。
-                
-                示例输入：“今晚6点去超市买菜，明天记得带伞”
-                期望输出：CLEAN_TASK: 去超市买菜，记得带伞 | DATE: {now.strftime('%Y-%m-%d')} 18:00 | RECUR: None
-                
-                请按照以下格式返回：CLEAN_TASK: 内容 | DATE: YYYY-MM-DD HH:MM | RECUR: Pattern"""},
-                {"role": "user", "content": task_text}
-            ],
+            messages=[{"role": "user", "content": prompt_info}],
+            response_format={"type": "json_object"},
             temperature=0
         )
-        res = response.choices[0].message.content.strip()
-        
-        # 解析返回结果
-        parts = {}
-        for p in res.split('|'):
-            if ':' in p:
-                k, v = p.split(':', 1)
-                parts[k.strip()] = v.strip()
-        
-        c_task = parts.get("CLEAN_TASK", task_text)
-        dt_str = parts.get("DATE", f_date)
-        recur_str = parts.get("RECUR", f_recur)
-        
-        # 验证日期格式
+        data_info = json.loads(res_info.choices[0].message.content)
+        dt_str = str(data_info.get("date", f_date)).strip()
+        recur_str = str(data_info.get("recur", f_recur)).strip()
+
+        # --- 任务 B: 前缀清洗 (AI 仅可见逗号前的内容) ---
+        cleaned_head = head_orig
+        if head_orig.strip():
+            prompt_clean = f"""
+            你是一个纯粹的文字清洁工。
+            任务：移除下面片段中的时间/日期词汇。
+            片段："{head_orig}"
+            指令：
+            1. 仅移除时间词。
+            2. 严禁改动、润色、概括、润饰或翻译其他文字。
+            3. 如果删完后没剩其它字，请返回 "(EMPTY)"。
+            """
+            res_clean = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt_clean}],
+                temperature=0
+            )
+            ai_out = res_clean.choices[0].message.content.strip().strip('"').strip()
+            
+            # 白名单防御：如果 AI 返回了原片段中不存在的新字，直接废弃 AI 结果
+            orig_chars = set(head_orig)
+            if all(c in orig_chars or c.isspace() or c in [',', '，', '.', '。'] for c in ai_out) and ai_out != "(EMPTY)":
+                cleaned_head = ai_out
+            elif ai_out == "(EMPTY)":
+                cleaned_head = ""
+
+        # --- 第4步：物理缝合 (拼接 AI 处理过的前缀和物理锁定的原始后缀) ---
+        if has_comma:
+            if not cleaned_head:
+                # 前缀只有时间词，删光了 -> 直接取原样后缀并去掉开头的逗号
+                # 注意：tail_verbatim[0] 是逗号本身
+                final_task = tail_verbatim[1:].strip()
+            else:
+                # 拼接：[洗净的前缀] + [100% 原始后缀（含逗号）]
+                final_task = cleaned_head.strip() + tail_verbatim
+        else:
+            final_task = cleaned_head.strip()
+
+        # 时间合法性终审
         try:
-            datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+            datetime.strptime(dt_str[:16], "%Y-%m-%d %H:%M")
         except:
             dt_str = f_date
             
-        return c_task, dt_str, (None if recur_str == "None" else recur_str)
+        return final_task, dt_str, (None if recur_str == "None" else recur_str)
+
     except Exception as e:
-        print(f"LLM 解析错误: {e}")
+        print(f"LLM 解析错误 (v6.4): {e}")
         return task_text, f_date, (None if f_recur == "None" else f_recur)
 
 def get_tasks():
@@ -415,114 +469,193 @@ def delete_enya_period(period_id):
     conn.close()
 
 # --- 5. Integrated Master Report & Auto-Backup Logic ---
+def get_categorized_tasks():
+    """集中处理所有任务的分选、循环展开和排序逻辑，供 UI 和 备份使用"""
+    tasks_df = get_tasks()
+    now = get_now_sgt()
+    today_date = now.date()
+    tomorrow_date = today_date + timedelta(days=1)
+    end_of_week = today_date + timedelta(days=6 - today_date.weekday())
+    next_month = today_date.replace(day=28) + timedelta(days=4)
+    end_of_month = next_month - timedelta(days=next_month.day)
+    
+    recurring_list, overdue_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], [], []
+    shadow_overdue, shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], [], []
+    open_tasks = pd.DataFrame()
+    completed_tasks = pd.DataFrame()
+
+    if not tasks_df.empty:
+        open_tasks = tasks_df[tasks_df['completed'] == 0]
+        completed_tasks = tasks_df[tasks_df['completed'] == 1]
+        
+        for _, row in open_tasks.iterrows():
+            if row['recurring_pattern']:
+                recurring_list.append(row)
+                continue
+            if not row['due_date']:
+                today_list.append(row)
+                continue
+            try:
+                due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
+                if due_dt < today_date: overdue_list.append(row)
+                elif due_dt == today_date: today_list.append(row)
+                elif due_dt == tomorrow_date: tomorrow_list.append(row)
+                elif due_dt <= end_of_week: week_list.append(row)
+                else: later_list.append(row)
+            except: today_list.append(row)
+
+        for item in recurring_list:
+            past_ptr = today_date - timedelta(days=7)
+            while past_ptr < today_date:
+                if hits_day(item['recurring_pattern'], past_ptr):
+                    shadow_overdue.append((item, past_ptr))
+                past_ptr += timedelta(days=1)
+            if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
+            if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
+            curr = tomorrow_date + timedelta(days=1)
+            while curr <= end_of_week:
+                if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
+                curr += timedelta(days=1)
+            curr_later = end_of_week + timedelta(days=1)
+            if curr_later <= end_of_month:
+                while curr_later <= end_of_month:
+                    if hits_day(item['recurring_pattern'], curr_later): shadow_later.append((item, curr_later))
+                    curr_later += timedelta(days=1)
+
+    recur_comps = get_recurring_completions()
+    def prepare_item_list(normal_items, shadow_items_with_dates=None, shadow_items_plain=None, default_date=None):
+        combined = []
+        for r in normal_items:
+            temp = r.copy(); temp['_is_shadow'] = False; combined.append(temp)
+        
+        def is_done(tid, d_str):
+            if recur_comps.empty: return False
+            return not recur_comps[(recur_comps['task_id'] == tid) & (recur_comps['completed_date'] == d_str[:10])].empty
+
+        if shadow_items_plain and default_date:
+            d_str = default_date.strftime("%Y-%m-%d")
+            for r in shadow_items_plain:
+                temp = r.copy(); temp['_is_shadow'] = True; temp['due_date'] = f"{d_str} 12:00"
+                temp['completed'] = 1 if is_done(r['id'], d_str) else 0; combined.append(temp)
+        if shadow_items_with_dates:
+            for r, d in shadow_items_with_dates:
+                d_str = d.strftime("%Y-%m-%d"); temp = r.copy(); temp['_is_shadow'] = True; temp['due_date'] = f"{d_str} 12:00"
+                temp['completed'] = 1 if is_done(r['id'], d_str) else 0; combined.append(temp)
+        
+        open_sub = [x for x in combined if not x['completed']]
+        done_sub = [x for x in combined if x['completed']]
+        open_sub.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
+        done_sub.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
+        return open_sub, done_sub
+
+    f_overdue_o, f_overdue_d = prepare_item_list(overdue_list, shadow_items_with_dates=shadow_overdue)
+    f_today_o, f_today_d = prepare_item_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
+    f_tomorrow_o, f_tomorrow_d = prepare_item_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
+    f_week_o, f_week_d = prepare_item_list(week_list, shadow_items_with_dates=shadow_week)
+    f_later_o, f_later_d = prepare_item_list(later_list, shadow_items_with_dates=shadow_later)
+
+    all_done_shadows = f_today_d + f_tomorrow_d + f_week_d + f_later_d
+    final_completed = completed_tasks # Start with the real ones
+    if all_done_shadows:
+        s_df = pd.DataFrame(all_done_shadows)
+        def format_shadow_name(x):
+            try:
+                date_str = str(x.get('due_date', ''))[:10]
+                return f"{x['task']} (周期性于 {date_str})" if x.get('_is_shadow') else x['task']
+            except: return str(x.get('task', ''))
+        s_df['task'] = s_df.apply(format_shadow_name, axis=1)
+        final_completed = pd.concat([final_completed, s_df], ignore_index=True)
+    
+    if isinstance(final_completed, pd.DataFrame) and not final_completed.empty:
+        final_completed = final_completed.sort_values(by='due_date', ascending=False)
+
+    return {
+        "overdue_open": f_overdue_o, "today_open": f_today_o, "tomorrow_open": f_tomorrow_o, 
+        "week_open": f_week_o, "later_open": f_later_o, "recurring_list": recurring_list,
+        "completed_tasks": final_completed, "all_tasks_df": tasks_df
+    }
+
 def generate_master_report():
-    """聚合所有模块数据生成完整报告"""
+    """
+    v6.6 - 镜像级高保全备份报告
+    确保自动同步、手动同步、下载文件三方内容与用户提供的样本 100% 视觉对齐。
+    """
     now_sgt = get_now_sgt()
-    full_lines = [
-        f"🏠 家庭管理系统 - 完整全量备份报告\n",
-        f"生成时间: {now_sgt.strftime('%Y-%m-%d %H:%M:%S')}\n",
-        f"{'='*50}\n\n"
+    data = get_categorized_tasks()
+    
+    # 标题对齐样本
+    lines = [
+        "家庭事项清单\n",
+        f"{'='*80}\n"
     ]
-    
-    # 1. 任务数据 (高详分类备份)
-    full_lines.append("【 📝 家庭事项清单 】\n")
-    try:
-        from datetime import timedelta
-        df = get_tasks()
-        if not df.empty:
-            now_dt = get_now_sgt()
-            today_date = now_dt.date()
-            tomorrow_date = today_date + timedelta(days=1)
-            end_of_week = today_date + timedelta(days=6 - today_date.weekday())
-            next_month = today_date.replace(day=28) + timedelta(days=4)
-            end_of_month = next_month - timedelta(days=next_month.day)
 
-            # 提取所有未完成且非循环的任务
-            pending_all = df[(df['completed'] == 0) & ((df['recurring_pattern'].isna()) | (df['recurring_pattern'] == ""))]
-            
-            # 分类逻辑
-            overdue, today, tomorrow, week, later = [], [], [], [], []
-            for _, r in pending_all.iterrows():
-                if not r['due_date']:
-                    today.append(r)
-                    continue
-                try:
-                    due_dt = datetime.strptime(r['due_date'], "%Y-%m-%d %H:%M").date()
-                    if due_dt < today_date: overdue.append(r)
-                    elif due_dt == today_date: today.append(r)
-                    elif due_dt == tomorrow_date: tomorrow.append(r)
-                    elif due_dt <= end_of_week: week.append(r)
-                    elif due_dt <= end_of_month: later.append(r)
-                    else: later.append(r) # 超过一月的也暂时放入
-                except:
-                    today.append(r)
+    def add_table_sec(title, items):
+        """表格化输出分区内容"""
+        lines.append(f"\n【{title}】\n")
+        # 严格按照样本的对齐方式：19位 | 50位 | 15位
+        lines.append(f"{'截止时间':<19}| {'任务内容':<50}| {'循环'}\n")
+        lines.append("-" * 80 + "\n")
+        
+        if not items:
+            lines.append(f"{' (暂无事项)':<19}| {'--':<50}| {'--'}\n")
+        else:
+            # 判断 items 类型 (list of dicts 或 DataFrame)
+            if isinstance(items, pd.DataFrame):
+                iterable = items.iterrows()
+                is_df = True
+            else:
+                iterable = items
+                is_df = False
 
-            def add_sub_section(title, items, icon="[ ]"):
-                full_lines.append(f"--- {title} ---\n")
-                if items:
-                    for r in items:
-                        due_str = f" (截止: {r['due_date'][:16]})" if r['due_date'] else ""
-                        full_lines.append(f"{icon} {r['task']}{due_str}\n")
+            for item in items:
+                # 获取行数据
+                row = item if not is_df else item[1]
+                
+                # 1. 截止时间清理
+                due_val = str(row.get('due_date', '') or '').strip()
+                due_cell = f"{due_val[:16]}" if due_val else "无设定"
+                
+                # 2. 任务内容清理 (去除换行符，限制显示长度)
+                task_content = str(row.get('task', '') or '').replace('\n', ' ').strip()
+                
+                # 3. 循环模式处理
+                recur_val = str(row.get('recurring_pattern', 'None')).strip()
+                if recur_val == "None" or not recur_val:
+                    recur_cell = "无"
                 else:
-                    full_lines.append("无\n")
-                full_lines.append("\n")
+                    recur_cell = recur_val
+                
+                # 格式化拼接一行
+                lines.append(f"{due_cell:<19}| {task_content:<50}| {recur_cell}\n")
 
-            add_sub_section("🔴 未完成事项", overdue, "[!]")
-            add_sub_section("⚡ 今日急需处理", today, "[ ]")
-            add_sub_section("🌙 明日事项", tomorrow, "[ ]")
-            add_sub_section("🗓️ 本周剩余事项", week, "[ ]")
-            add_sub_section("⏳ 本月剩余事项", later, "[ ]")
-
-            # 循环事项
-            recurring = df[(df['completed'] == 0) & (df['recurring_pattern'].notna()) & (df['recurring_pattern'] != "")]
-            full_lines.append("--- 🔄 循环事项 ---\n")
-            if not recurring.empty:
-                for _, r in recurring.iterrows():
-                    full_lines.append(f"[∞] {r['task']} (模式: {r['recurring_pattern']})\n")
-            else:
-                full_lines.append("无\n")
-            full_lines.append("\n")
-
-            # 已完成事项
-            done = df[df['completed'] == 1]
-            full_lines.append("--- ✅ 已完成事项 (最近50条) ---\n")
-            if not done.empty:
-                done_sorted = done.sort_values(by='created_at', ascending=False).head(50)
-                for _, r in done_sorted.iterrows():
-                    full_lines.append(f"[√] {r['task']}\n")
-            else:
-                full_lines.append("无\n")
-        else:
-            full_lines.append("尚无任务数据。\n")
-    except Exception as e:
-        full_lines.append(f"任务分类备份失败: {e}\n")
+    # 按样本顺序输出分区
+    add_table_sec("🔴 未完成事项", data["overdue_open"])
+    add_table_sec("⚡ 今日急需处理", data["today_open"])
+    add_table_sec("🌙 明日事项", data["tomorrow_open"])
+    add_table_sec("🗓️ 本周剩余事项", data["week_open"])
+    add_table_sec("⏳ 本月剩余事项", data["later_open"])
+    add_table_sec("🔄 长期循环事项", data["recurring_list"])
+    add_table_sec("✅ 已完成事项归档", data["completed_tasks"])
     
-    # 2. 恩雅的健康 - 身高体重
-    full_lines.append("\n【 📏 恩雅的身高体重记录 】\n")
-    try:
-        v_df = get_enya_vitals()
-        if not v_df.empty:
-            for _, r in v_df.iterrows():
-                full_lines.append(f"{r['record_date']}: 身高 {r['height']}cm | 体重 {r['weight']}kg\n")
-        else:
-            full_lines.append("尚无记录。\n")
-    except Exception as e:
-        full_lines.append(f"健康数据提取失败: {e}\n")
+    # 健康记录 (保持一致性但格式微调)
+    lines.append(f"\n\n\n【 📏 恩雅的身高体重记录 】\n")
+    v_df = get_enya_vitals()
+    if not v_df.empty:
+        for _, r in v_df.iterrows():
+            lines.append(f"- {r['record_date']}: 身高 {r['height']}cm | 体重 {r['weight']}kg\n")
+    else:
+        lines.append("尚无记录。\n")
 
-    # 3. 恩雅的健康 - 经期
-    full_lines.append("\n【 📅 恩雅的经期记录 】\n")
-    try:
-        p_df = get_enya_periods()
-        if not p_df.empty:
-            for _, r in p_df.iterrows():
-                full_lines.append(f"{r['record_date']}: {r['event_type']}\n")
-        else:
-            full_lines.append("尚无记录。\n")
-    except Exception as e:
-        full_lines.append(f"经期记录提取失败: {e}\n")
+    lines.append("\n【 📅 恩雅的经期记录 】\n")
+    p_df = get_enya_periods()
+    if not p_df.empty:
+        for _, r in p_df.iterrows():
+            lines.append(f"- {r['record_date']}: {r['event_type']}\n")
+    else:
+        lines.append("尚无记录。\n")
 
-    full_lines.append(f"\n\n{'='*50}\n备份结束")
-    return "".join(full_lines)
+    lines.append(f"\n\n{'='*80}\n备份时间: {now_sgt.strftime('%Y-%m-%d %H:%M:%S')}\n(v{VERSION})")
+    return "".join(lines)
 
 def run_auto_backup_logic(silent=True):
     """
@@ -991,125 +1124,15 @@ try:
 
 
     # --- 7. Data Preparation ---
-    tasks_df = get_tasks()
-    now = get_now_sgt()
-    today_date = now.date()
-    tomorrow_date = today_date + timedelta(days=1)
-    end_of_week = today_date + timedelta(days=6 - today_date.weekday())
-    
-    # Calculate end of current month
-    next_month = today_date.replace(day=28) + timedelta(days=4)
-    end_of_month = next_month - timedelta(days=next_month.day)
-    
-    # Initialize all lists to avoid NameErrors
-    recurring_list, overdue_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], [], []
-    shadow_overdue, shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], [], []
-    open_tasks = pd.DataFrame()
-    completed_tasks = pd.DataFrame()
-
-    if not tasks_df.empty:
-        open_tasks = tasks_df[tasks_df['completed'] == 0]
-        completed_tasks = tasks_df[tasks_df['completed'] == 1]
-        
-        for _, row in open_tasks.iterrows():
-            if row['recurring_pattern']:
-                recurring_list.append(row)
-                continue
-            if not row['due_date']:
-                today_list.append(row)
-                continue
-            try:
-                due_dt = datetime.strptime(row['due_date'], "%Y-%m-%d %H:%M").date()
-                if due_dt < today_date: overdue_list.append(row)
-                elif due_dt == today_date: today_list.append(row)
-                elif due_dt == tomorrow_date: tomorrow_list.append(row)
-                elif due_dt <= end_of_week: week_list.append(row)
-                else: later_list.append(row)
-            except: today_list.append(row)
-
-        for item in recurring_list:
-            # Check last 7 days for missed recurring items
-            past_ptr = today_date - timedelta(days=7)
-            while past_ptr < today_date:
-                if hits_day(item['recurring_pattern'], past_ptr):
-                    shadow_overdue.append((item, past_ptr))
-                past_ptr += timedelta(days=1)
-
-            if hits_day(item['recurring_pattern'], today_date): shadow_today.append(item)
-            if hits_day(item['recurring_pattern'], tomorrow_date): shadow_tomorrow.append(item)
-            
-            curr = tomorrow_date + timedelta(days=1)
-            while curr <= end_of_week:
-                if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
-                curr += timedelta(days=1)
-                
-            # Scan beyond the current week up to the end of the month
-            curr_later = end_of_week + timedelta(days=1)
-            # Make sure we don't go backwards if end_of_week is already in the next month
-            if curr_later <= end_of_month:
-                while curr_later <= end_of_month:
-                    if hits_day(item['recurring_pattern'], curr_later): shadow_later.append((item, curr_later))
-                    curr_later += timedelta(days=1)
-
-    # --- 8. Combine and Sort ---
-    # Fetch recurring completions
-    recur_comps = get_recurring_completions()
-    
-    def prepare_sorted_list(normal_items, shadow_items_with_dates=None, shadow_items_plain=None, default_date=None):
-        combined = []
-        for r in normal_items:
-            temp = r.copy()
-            temp['_is_shadow'] = False
-            combined.append(temp)
-        
-        # Helper to check if a specific task/date is completed
-        def is_done(tid, d_str):
-            if recur_comps.empty: return False
-            return not recur_comps[(recur_comps['task_id'] == tid) & (recur_comps['completed_date'] == d_str[:10])].empty
-
-        if shadow_items_plain and default_date:
-            d_str = default_date.strftime("%Y-%m-%d")
-            for r in shadow_items_plain:
-                temp = r.copy()
-                temp['_is_shadow'] = True
-                temp['due_date'] = f"{d_str} 12:00"
-                temp['completed'] = 1 if is_done(r['id'], d_str) else 0
-                combined.append(temp)
-        
-        if shadow_items_with_dates:
-            for r, d in shadow_items_with_dates:
-                d_str = d.strftime("%Y-%m-%d")
-                temp = r.copy()
-                temp['_is_shadow'] = True
-                temp['due_date'] = f"{d_str} 12:00"
-                temp['completed'] = 1 if is_done(r['id'], d_str) else 0
-                combined.append(temp)
-        
-        # Separate open and completed within each list
-        open_list = [x for x in combined if not x['completed']]
-        done_list = [x for x in combined if x['completed']]
-        
-        # Sort each
-        open_list.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
-        done_list.sort(key=lambda x: x['due_date'] if x['due_date'] else "9999-12-31")
-        
-        return open_list, done_list
-
-    final_overdue_open, final_overdue_done = prepare_sorted_list(overdue_list, shadow_items_with_dates=shadow_overdue)
-    final_today_open, final_today_done = prepare_sorted_list(today_list, shadow_items_plain=shadow_today, default_date=today_date)
-    final_tomorrow_open, final_tomorrow_done = prepare_sorted_list(tomorrow_list, shadow_items_plain=shadow_tomorrow, default_date=tomorrow_date)
-    final_week_open, final_week_done = prepare_sorted_list(week_list, shadow_items_with_dates=shadow_week)
-    final_later_open, final_later_done = prepare_sorted_list(later_list, shadow_items_with_dates=shadow_later)
-
-    # Compile all completed shadow tasks for the t3 tab
-    all_completed_shadows = final_today_done + final_tomorrow_done + final_week_done + final_later_done
-    if all_completed_shadows:
-        shadows_df = pd.DataFrame(all_completed_shadows)
-        # Update display titles for completed shadow tasks to include individual dates
-        shadows_df['task'] = shadows_df.apply(lambda x: f"{x['task']} (周期性于 {x['due_date'][:10]})" if x['_is_shadow'] else x['task'], axis=1)
-        completed_tasks = pd.concat([completed_tasks, shadows_df], ignore_index=True)
-        # Final sort for completed archive
-        completed_tasks.sort_values(by='due_date', ascending=False, inplace=True)
+    categorized_data = get_categorized_tasks()
+    tasks_df = categorized_data["all_tasks_df"]
+    recurring_list = categorized_data["recurring_list"]
+    completed_tasks = categorized_data["completed_tasks"]
+    final_overdue_open = categorized_data["overdue_open"]
+    final_today_open = categorized_data["today_open"]
+    final_tomorrow_open = categorized_data["tomorrow_open"]
+    final_week_open = categorized_data["week_open"]
+    final_later_open = categorized_data["later_open"]
 
     # Main Interface
     # CSS to style the download button in the header
@@ -1192,38 +1215,8 @@ try:
     with top_tab1:
 
             def generate_txt_report():
-                lines = ["家庭事项清单\n", "=" * 80 + "\n\n"]
-
-                def add_section(title, task_list):
-                    # Ensure we handle DataFrame vs List of Dicts properly
-                    if isinstance(task_list, pd.DataFrame):
-                        if task_list.empty: return
-                        iterable = [row.to_dict() for _, row in task_list.iterrows()]
-                    else:
-                        if not task_list: return
-                        iterable = task_list
-
-                    lines.append(f"【{title}】\n")
-                    lines.append(f"{'截止时间':<18} | {'任务内容':<45} | {'循环':<10}\n")
-                    lines.append("-" * 80 + "\n")
-
-                    for row in iterable:
-                        _due_raw = str(row.get('due_date', ''))
-                        due = _due_raw[:16] if pd.notna(row.get('due_date')) and row.get('due_date') else "未设置"
-                        task = str(row.get('task', '')).replace('\n', ' ')
-                        recur = str(row.get('recurring_pattern', '')) if pd.notna(row.get('recurring_pattern')) and row.get('recurring_pattern') else "无"
-                        lines.append(f"{due:<18} | {task:<45} | {recur:<10}\n")
-                    lines.append("\n")
-
-                add_section("🔴 未完成事项", final_overdue_open)
-                add_section("⚡ 今日急需处理", final_today_open)
-                add_section("🌙 明日事项", final_tomorrow_open)
-                add_section("🗓️ 本周剩余事项", final_week_open)
-                add_section("⏳ 本月剩余事项", final_later_open)
-                add_section("🔄 长期循环事项", recurring_list)
-                add_section("✅ 已完成事项归档", completed_tasks)
-
-                return "".join(lines) if len(lines) > 2 else "没有任务数据。"
+                # 为了保持 100% 一致，现在 Download 按钮直接调用统一的系统备份报告函数
+                return generate_master_report()
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1270,26 +1263,25 @@ try:
                     if final_overdue_open:
                         st.markdown('<div class="overdue-header">🔴 未完成事项</div>', unsafe_allow_html=True)
                         for row in final_overdue_open: 
-                            # 确定是否是 shadow task
-                            is_sh = row.get('_is_shadow', False)
+                            is_sh = bool(row.get('_is_shadow', False))
                             render_task(row, is_shadow=is_sh, location="final_overdue", is_overdue=True)
 
                     # --- Displays Tab 1 ---
                     if final_today_open:
                         st.markdown('<div class="section-header" style="color: #ef4444; border-bottom-color: #fecaca;">⚡ 今日急需处理</div>', unsafe_allow_html=True)
-                        for row in final_today_open: render_task(row, is_shadow=row['_is_shadow'], location="final_today")
+                        for row in final_today_open: render_task(row, is_shadow=bool(row.get('_is_shadow', False)), location="final_today")
 
                     if final_tomorrow_open:
                         st.markdown('<div class="section-header">🌙 明日事项</div>', unsafe_allow_html=True)
-                        for row in final_tomorrow_open: render_task(row, is_shadow=row['_is_shadow'], location="final_tomorrow")
+                        for row in final_tomorrow_open: render_task(row, is_shadow=bool(row.get('_is_shadow', False)), location="final_tomorrow")
 
                     if final_week_open:
                         st.markdown('<div class="section-header">🗓️ 本周剩余事项</div>', unsafe_allow_html=True)
-                        for row in final_week_open: render_task(row, is_shadow=row['_is_shadow'], location="final_week")
+                        for row in final_week_open: render_task(row, is_shadow=bool(row.get('_is_shadow', False)), location="final_week")
 
                     if final_later_open:
                         st.markdown('<div class="section-header">⏳ 本月剩余事项</div>', unsafe_allow_html=True)
-                        for row in final_later_open: render_task(row, is_shadow=row['_is_shadow'], location="final_later")
+                        for row in final_later_open: render_task(row, is_shadow=bool(row.get('_is_shadow', False)), location="final_later")
 
             with t2:
                 st.markdown('<div class="section-header">🔄 长期循环事项</div>', unsafe_allow_html=True)
