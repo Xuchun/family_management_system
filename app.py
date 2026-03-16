@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.2"
+VERSION = "9.7.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1633,12 +1633,21 @@ try:
             else:
                 cols_g[2].button("➕ 添加", use_container_width=True, type="primary", on_click=handle_add)
 
-            # 显示回调中产生的消息
+            # 🛠️ v9.7.3 消息显示占位符
+            msg_ph = st.empty()
+
+            # 🛠️ v9.7.3 处理通知消息
             if "_fitness_msg" in st.session_state:
                 msg_type, msg_text = st.session_state.pop("_fitness_msg")
-                if msg_type == "toast": st.toast(msg_text, icon="✨")
-                elif msg_type == "success": st.success(msg_text)
-                elif msg_type == "warning": st.warning(msg_text)
+                with msg_ph:
+                    if msg_type == "toast":
+                        st.toast(msg_text, icon="✨")
+                    elif msg_type == "success":
+                        st.success(msg_text)
+                        time.sleep(5)
+                        st.empty() # 5秒后自动消除
+                    elif msg_type == "warning":
+                        st.warning(msg_text)
 
             st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_allow_html=True)
             
