@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.7"
+VERSION = "9.7"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1602,17 +1602,23 @@ try:
                     if g_name and g_val:
                         if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
                             if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
+                            st.session_state["g_name_inp"] = ""
+                            st.session_state["g_val_inp"] = ""
                             st.success("已更新！")
                             time.sleep(0.5)
                             st.rerun()
                     else: st.warning("请填完信息")
                 if st.button("取消修改", key="cancel_edit_goal"):
                     if "goal_to_edit" in st.session_state: st.session_state.pop("goal_to_edit")
+                    st.session_state["g_name_inp"] = ""
+                    st.session_state["g_val_inp"] = ""
                     st.rerun()
             else:
                 if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
                     if g_name and g_val:
                         if add_dad_fitness_goal(g_name, g_val):
+                            st.session_state["g_name_inp"] = ""
+                            st.session_state["g_val_inp"] = ""
                             st.toast("✅ 已添加新目标！", icon="✨")
                             time.sleep(0.5)
                             st.rerun()
@@ -1657,6 +1663,9 @@ try:
                     with g_cols[2]:
                         if st.button("✏️", key=f"edit_g_{row['id']}", help="修改此目标", use_container_width=True):
                             st.session_state["goal_to_edit"] = row.to_dict()
+                            # 🛠️ 核心修复：手动同步值到 key 绑定的 session_state
+                            st.session_state["g_name_inp"] = row['goal_name']
+                            st.session_state["g_val_inp"] = row['goal_value']
                             st.rerun()
                     
                     with g_cols[3]:
