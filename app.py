@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.4"
+VERSION = "9.6.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1591,6 +1591,7 @@ try:
             st.markdown("<h2 style='color: #1e40af;'>🎯 爸爸的健身目标</h2>", unsafe_allow_html=True)
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
+            goal_to_edit = st.session_state.get("goal_to_edit", None)
             st.markdown(f"#### ➕ {('修改目标' if goal_to_edit else '新增目标')}")
             cols_g = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
             g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
