@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "7.0"
+VERSION = "7.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -118,16 +118,18 @@ def backup_to_gdrive(content_str, filename, overwrite=False):
 
 def trigger_realtime_backup():
     """
-    v7.0 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
-    每当数据库发生变动（增、删、改），自动后台异步同步全量数据，并强制覆盖 realtime_backup.txt。
+    v7.1 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
+    强制单文件覆盖协议。确保 Google Drive 只有一份顶层的更新文件。
     """
     def _async_backup():
         try:
+            # 加入实时备份的水印，方便辨认
             content = generate_master_report()
-            # v7.0 强制执行覆盖操作，确保 Google Drive 只有一份最新的 realtime_backup.txt
+            content += f"\n\n[🛰️ RTK 模式实时增量备份] 覆盖时间: {get_now_sgt().strftime('%H:%M:%S')}"
+            # v7.1 强化 Singleton 模式
             backup_to_gdrive(content, "realtime_backup.txt", overwrite=True)
         except:
-            pass # 后台备份失败不影响主应用
+            pass 
     threading.Thread(target=_async_backup, daemon=True).start()
 
 # --- 4. Database Functions ---
