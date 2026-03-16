@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "6.8"
+VERSION = "6.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -114,6 +114,20 @@ def backup_to_gdrive(content_str, filename):
             return False, f"❌ 备份失败: HTTP {response.status_code}"
     except Exception as e:
         return False, f"❌ 网络请求错误: {str(e)}"
+
+def trigger_realtime_backup():
+    """
+    v6.9 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
+    每当数据库发生变动（增、删、改），自动后台异步同步全量数据到云端 realtime_backup.txt。
+    """
+    def _async_backup():
+        try:
+            content = generate_master_report()
+            # 强制备份到指定名称，实现实时同步
+            backup_to_gdrive(content, "realtime_backup.txt")
+        except:
+            pass # 后台备份失败不影响主应用
+    threading.Thread(target=_async_backup, daemon=True).start()
 
 # --- 4. Database Functions ---
 def init_db():
@@ -356,6 +370,8 @@ def add_task(task_text):
         conn.close()
         
         if row:
+            # 实时同步触发
+            trigger_realtime_backup()
             return {"success": True, "task": decrypt_str(row[0]), "due": row[1], "recur": recur_pattern}
         else:
             return {"success": False, "error": "数据库验证插入失败。"}
@@ -368,6 +384,7 @@ def update_task_status(task_id, completed):
     c.execute("UPDATE tasks SET completed = ? WHERE id = ?", (completed, task_id))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def delete_task(task_id):
     conn = sqlite3.connect(DB_FILE)
@@ -375,6 +392,7 @@ def delete_task(task_id):
     c.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def update_task_text(task_id, new_text):
     conn = sqlite3.connect(DB_FILE)
@@ -394,6 +412,7 @@ def update_task_text(task_id, new_text):
               (enc_text, due_datetime, recur_pattern, task_id))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def mark_recurring_date_completed(task_id, date_str):
     conn = sqlite3.connect(DB_FILE)
@@ -401,6 +420,7 @@ def mark_recurring_date_completed(task_id, date_str):
     c.execute("INSERT OR IGNORE INTO recurring_completions (task_id, completed_date) VALUES (?, ?)", (task_id, date_str))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def unmark_recurring_date_completed(task_id, date_str):
     with sqlite3.connect(DB_FILE) as conn:
@@ -436,6 +456,7 @@ def add_enya_vital(date_str, height, weight):
     c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", (date_str, enc_h, enc_w))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def delete_enya_vital(vital_id):
     conn = sqlite3.connect(DB_FILE)
@@ -443,6 +464,7 @@ def delete_enya_vital(vital_id):
     c.execute("DELETE FROM enya_vitals WHERE id = ?", (vital_id,))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def get_enya_periods():
     conn = sqlite3.connect(DB_FILE)
@@ -460,6 +482,7 @@ def add_enya_period(date_str, event_type):
     c.execute("INSERT INTO enya_period (record_date, event_type) VALUES (?, ?)", (date_str, enc_et))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 def delete_enya_period(period_id):
     conn = sqlite3.connect(DB_FILE)
@@ -467,6 +490,7 @@ def delete_enya_period(period_id):
     c.execute("DELETE FROM enya_period WHERE id = ?", (period_id,))
     conn.commit()
     conn.close()
+    trigger_realtime_backup()
 
 # --- 5. Integrated Master Report & Auto-Backup Logic ---
 def get_categorized_tasks():
