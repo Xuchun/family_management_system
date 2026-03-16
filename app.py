@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.6.5"
+VERSION = "9.6.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1588,7 +1588,7 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         with top_tab2:
-            st.markdown("<h2 style='color: #1e40af;'>🎯 爸爸的健身目标</h2>", unsafe_allow_html=True)
+            st.subheader('🎯 爸爸的健身目标')
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
             goal_to_edit = st.session_state.get("goal_to_edit", None)
