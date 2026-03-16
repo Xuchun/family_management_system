@@ -1240,7 +1240,7 @@ try:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
             # 1. 云端同步 (实时)
-            if st.button("☁️ 立即云端同步", use_container_width=True, help="同时同步文本报告和数据库"):
+            if st.button("☁️ 云端同步数据", use_container_width=True, help="同时同步文本报告和数据库"):
                 with st.spinner("同步中..."):
                     trigger_realtime_backup()
                     st.toast("✅ 双重同步任务已在后台启动！", icon="🚀")
