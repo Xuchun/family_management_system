@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.4"
+VERSION = "9.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -291,11 +291,13 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         tail_verbatim = ""
 
     try:
-        # --- 任务 A: 调度解析 (AI 需感知全文以确定时间) ---
+        # --- 任务 A: 调度解析 (AI 仅可见逗号前的内容) ---
         prompt_info = f"""
         你是一位极其严谨的精密调度专家。今天是 {now.strftime('%Y-%m-%d')}。
         
-        你的任务：从提供的“全文”中分析截止日期（date）和循环模式（recur）。
+        【防火墙指令】：你只能看见任务的“核心前缀”。请仅基于此分析时间和模式。
+        
+        你的任务：从提供的“片段”中分析截止日期（date）和循环模式（recur）。
         
         【重要判别准则】：
         1. 必须区分“描述性语言”与“调度意图”。
@@ -303,7 +305,7 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
            - 如果用户指明了具体时间（如“明天早上9点”、“3月20日”），这通常是一个“None”循环的一次性任务。
         2. 只有明确要求“每天/每周/每月都要做”时，才设置 recur。
         
-        全文："{task_text}"
+        分析片段："{head_orig}"
         备选值：date={f_date}, recur={f_recur}
         返回 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/daily/weekly/monthly/..." }}
         """
