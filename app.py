@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.3"
+VERSION = "9.7.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1592,10 +1592,16 @@ try:
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
             goal_to_edit = st.session_state.get("goal_to_edit", None)
-            st.markdown(f"#### ➕ {('修改目标' if goal_to_edit else '新增目标')}")
+            
             cols_g = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
-            g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
-            g_val = cols_g[1].text_input("目标数值/区间", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), placeholder="如：65-67公斤", key="g_val_inp")
+            with cols_g[0]:
+                st.markdown("<b>目标名称</b>", unsafe_allow_html=True)
+                g_name = st.text_input("名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), 
+                                      placeholder="如：体重、体脂率", key="g_name_inp", label_visibility="collapsed")
+            with cols_g[1]:
+                st.markdown("<b>目标数值/区间</b>", unsafe_allow_html=True)
+                g_val = st.text_input("数值", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), 
+                                     placeholder="如：65-67公斤", key="g_val_inp", label_visibility="collapsed")
             
             # 🛠️ v9.7.2 核心修复：定义所有操作的回调函数
             def handle_add():
