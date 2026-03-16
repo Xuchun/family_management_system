@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.1"
+VERSION = "9.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -762,16 +762,75 @@ def generate_master_report():
 
 def run_auto_backup_logic(silent=True):
     """
-    (v8.7 已禁用) 原定于中午 12 点和凌晨 1 点的自动备份已移除。
+    检查是否需要自动备份 (中午 12 点和凌晨 1 点)
+    使用与实时同步不同的文件名，形成每日双重快照点。
     """
-    pass
+    try:
+        now = get_now_sgt()
+        current_date = now.strftime("%Y-%m-%d")
+        current_hour = now.hour
+        
+        target_slot = None
+        if current_hour == 1:
+            target_slot = "01am"
+        elif current_hour == 12:
+            target_slot = "12pm"
+        
+        if target_slot:
+            slot_key = f"last_auto_backup_{target_slot}"
+            
+            # 使用独立连接确保后台线程安全
+            with sqlite3.connect(DB_FILE) as conn:
+                c = conn.cursor()
+                c.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, val TEXT)")
+                c.execute("SELECT val FROM system_config WHERE key = ?", (slot_key,))
+                res = c.fetchone()
+                last_date = res[0] if res else ""
+                
+                if last_date != current_date:
+                    # 1. 备份文本报告 (使用独立名称)
+                    content = generate_master_report()
+                    report_name = f"AutoSync_Report_{target_slot}.txt"
+                    backup_to_gdrive(content, report_name, overwrite=True, is_binary=False)
+                    
+                    # 2. 备份二进制数据库 (使用独立名称)
+                    if os.path.exists(DB_FILE):
+                        with open(DB_FILE, "rb") as f:
+                            db_bytes = f.read()
+                            db_b64 = base64.b64encode(db_bytes).decode('utf-8')
+                        backup_to_gdrive(db_b64, f"AutoSync_DB_{target_slot}.db", overwrite=True, is_binary=True)
+                    
+                    # 更新最后同步日期
+                    c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
+                    conn.commit()
+                    
+                    if not silent:
+                        st.session_state[f"auto_backup_msg_{target_slot}"] = f"✅ 已完成每日 {target_slot} 固定快照同步。"
+    except Exception as e:
+        if not silent:
+            print(f"自动备份后台错误: {e}")
 
-# --- 🎯 线程启动器 (v8.7 已禁用自动守护线程) ---
-# if "daemon_started" not in st.session_state:
-#     if not any(t.name == "FamilyBackupDaemon" for t in threading.enumerate()):
-#         daemon = threading.Thread(target=autonomous_backup_daemon, name="FamilyBackupDaemon", daemon=True)
-#         daemon.start()
-#         st.session_state["daemon_started"] = True
+def autonomous_backup_daemon():
+    """后台永驻守护线程：每 30 秒巡检一次时间，准点触发每日快照"""
+    time.sleep(10) # 延迟启动以待主程序就绪
+    while True:
+        try:
+            now = get_now_sgt()
+            # 只有在整点的第一分钟内尝试触发
+            if (now.hour == 1 or now.hour == 12) and now.minute == 0:
+                run_auto_backup_logic(silent=True)
+                time.sleep(61) # 跨过这一分钟，避免重复触发
+            else:
+                time.sleep(30)
+        except:
+            time.sleep(60)
+
+# --- 🎯 线程启动器 (v9.2 恢复自动快照守护线程) ---
+if "daemon_started" not in st.session_state:
+    if not any(t.name == "FamilyBackupDaemon" for t in threading.enumerate()):
+        daemon = threading.Thread(target=autonomous_backup_daemon, name="FamilyBackupDaemon", daemon=True)
+        daemon.start()
+        st.session_state["daemon_started"] = True
 
 
 # --- 5. UI Styling ---
@@ -1241,6 +1300,11 @@ try:
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+        # 如果刚才触发了自动快照备份，给予一个小提示
+        for slot in ["01am", "12pm"]:
+            msg_key = f"auto_backup_msg_{slot}"
+            if msg_key in st.session_state:
+                st.toast(st.session_state.pop(msg_key), icon="📸")
 
     with c_menu:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
