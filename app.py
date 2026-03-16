@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "6.7"
+VERSION = "6.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1213,7 +1213,7 @@ try:
                         st.error(msg)
 
     st.markdown('<br>', unsafe_allow_html=True)
-    top_tab1, top_tab2, top_tab3, top_tab4 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
+    top_tab1, top_tab2, top_tab3, top_tab4, top_tab5 = st.tabs(['📝 家庭事项', '💰 家庭财务', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康', '⚙️ 系统运维'])
 
     with top_tab1:
 
@@ -1411,6 +1411,51 @@ try:
                         delete_enya_period(row['id'])
                         st.rerun()
                     st.divider()
+
+    with top_tab5:
+        st.markdown("## ⚙️ 系统运维与数据迁移")
+        st.info("⚠️ **注意**: Streamlit Cloud 容器是临时性的。每次重启或更新代码，本地数据库 `tasks.db` 都会被重置。请定期导出备份并在重启后进行恢复。")
+        
+        m_col1, m_col2 = st.columns(2)
+        
+        with m_col1:
+            st.markdown("### 📤 数据恢复 (上传)")
+            st.write("如果您在本地有 `tasks.db` 文件，或者刚从旧容器下载了备份，请在此上传以恢复数据。")
+            uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"])
+            if uploaded_db is not None:
+                if st.button("🔥 确认恢复数据库", type="primary", use_container_width=True):
+                    try:
+                        # 确保目录存在
+                        if not os.path.exists("data"): os.makedirs("data")
+                        with open(DB_FILE, "wb") as f:
+                            f.write(uploaded_db.getbuffer())
+                        st.success("✅ 数据库恢复成功！正在重新加载...")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"恢复失败: {e}")
+
+        with m_col2:
+            st.markdown("### 📥 数据备份 (下载)")
+            st.write("将当前的二进制数据库下载到本地。建议在每次重大操作后或重启前下载。")
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, "rb") as f:
+                    db_bytes = f.read()
+                st.download_button(
+                    label="💾 下载最新 tasks.db",
+                    data=db_bytes,
+                    file_name=f"Family_DB_Backup_{get_now_sgt().strftime('%Y%m%d_%H%M')}.db",
+                    mime="application/octet-stream",
+                    use_container_width=True
+                )
+            else:
+                st.warning("未找到数据库文件。")
+
+        st.markdown("---")
+        st.markdown("### 🛡️ 系统状态")
+        st.write(f"**系统版本**: v{VERSION}")
+        st.write(f"**数据库路径**: `{os.path.abspath(DB_FILE)}`")
+        st.write(f"**加密状态**: {'✅ 已启用' if db_enc_key else '⚠️ 未启用 (环境变量缺失)'}")
 
 
 
