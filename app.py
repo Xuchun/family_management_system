@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.5.1"
+VERSION = "9.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -194,8 +194,26 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS system_config
                  (key TEXT PRIMARY KEY,
                   val TEXT)''')
+
+    # 6. 爸爸的健身目标表 (v9.6)
+    c.execute('''CREATE TABLE IF NOT EXISTS dad_fitness_goals
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  goal_name TEXT NOT NULL,
+                  goal_value TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
-    # 6. 初始化密码
+    # 7. 初始化默认健身目标
+    c.execute("SELECT COUNT(*) FROM dad_fitness_goals")
+    if c.fetchone()[0] == 0:
+        default_goals = [
+            ("体重", "65-67公斤"),
+            ("体脂率", "15%-17%"),
+            ("腰围", "81-83厘米")
+        ]
+        for name, val in default_goals:
+            c.execute("INSERT INTO dad_fitness_goals (goal_name, goal_value) VALUES (?, ?)", (encrypt_str(name), encrypt_str(val)))
+
+    # 8. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
         hashed_init = hash_password(str(app_pwd))
@@ -253,6 +271,50 @@ def update_app_password(new_pwd):
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
             c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (str(new_pwd),))
+            conn.commit()
+            return True
+    except:
+        return False
+
+# --- 爸爸的健身目标管理 (v9.6) ---
+def get_dad_fitness_goals():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_fitness_goals ORDER BY id ASC", conn)
+            if not df.empty:
+                df['goal_name'] = df['goal_name'].apply(decrypt_str)
+                df['goal_value'] = df['goal_value'].apply(decrypt_str)
+            return df
+    except:
+        return pd.DataFrame()
+
+def add_dad_fitness_goal(name, value):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO dad_fitness_goals (goal_name, goal_value) VALUES (?, ?)", 
+                      (encrypt_str(name), encrypt_str(value)))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def update_dad_fitness_goal(goal_id, name, value):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("UPDATE dad_fitness_goals SET goal_name = ?, goal_value = ? WHERE id = ?", 
+                      (encrypt_str(name), encrypt_str(value), goal_id))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def delete_dad_fitness_goal(goal_id):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM dad_fitness_goals WHERE id = ?", (goal_id,))
             conn.commit()
             return True
     except:
@@ -764,6 +826,14 @@ def generate_master_report():
     if not p_df.empty:
         for _, r in p_df.iterrows():
             lines.append(f"- {r['record_date']}: {r['event_type']}\n")
+    else:
+        lines.append("尚无记录。\n")
+
+    lines.append("\n【 🏋️‍♂️ 爸爸的健身目标 】\n")
+    g_df = get_dad_fitness_goals()
+    if not g_df.empty:
+        for _, r in g_df.iterrows():
+            lines.append(f"- {r['goal_name']}: {r['goal_value']}\n")
     else:
         lines.append("尚无记录。\n")
 
@@ -1518,8 +1588,54 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         with top_tab2:
-            st.subheader('🎯 爸爸的健身目标')
-            st.info('内容可以先为空，我后面会继续加入。')
+            st.markdown("<h2 style='color: #1e40af;'>🎯 爸爸的健身目标</h2>", unsafe_allow_html=True)
+            
+            # --- 1. 新增/修改目标逻辑 ---
+            goal_to_edit = st.session_state.get("goal_to_edit", None)
+            
+            with st.expander("➕ " + ("修改目标" if goal_to_edit else "新增健身目标"), expanded=(goal_to_edit is not None)):
+                cols_g = st.columns([0.4, 0.4, 0.2], vertical_alignment="bottom")
+                g_name = cols_g[0].text_input("目标名称", value=(goal_to_edit['goal_name'] if goal_to_edit else ""), placeholder="如：体重、体脂率", key="g_name_inp")
+                g_val = cols_g[1].text_input("目标数值/区间", value=(goal_to_edit['goal_value'] if goal_to_edit else ""), placeholder="如：65-67公斤", key="g_val_inp")
+                
+                if goal_to_edit:
+                    if cols_g[2].button("💾 更新", use_container_width=True, type="primary"):
+                        if g_name and g_val:
+                            if update_dad_fitness_goal(goal_to_edit['id'], g_name, g_val):
+                                st.session_state.pop("goal_to_edit")
+                                st.success("已更新！")
+                                st.rerun()
+                    if st.button("取消修改", key="cancel_edit_goal"):
+                        st.session_state.pop("goal_to_edit")
+                        st.rerun()
+                else:
+                    if cols_g[2].button("➕ 添加", use_container_width=True, type="primary"):
+                        if g_name and g_val:
+                            if add_dad_fitness_goal(g_name, g_val):
+                                st.success("已添加！")
+                                st.rerun()
+
+            st.markdown("---")
+            
+            # --- 2. 显示目标列表 ---
+            goals_df = get_dad_fitness_goals()
+            if goals_df.empty:
+                st.info("目前没有设定健身目标，点击上方展开新增。")
+            else:
+                for _, row in goals_df.iterrows():
+                    g_cols = st.columns([0.35, 0.35, 0.15, 0.15])
+                    g_cols[0].markdown(f"**{row['goal_name']}**")
+                    g_cols[1].write(row['goal_value'])
+                    
+                    if g_cols[2].button("✏️", key=f"edit_g_{row['id']}", help="修改此目标"):
+                        st.session_state["goal_to_edit"] = row.to_dict()
+                        st.rerun()
+                        
+                    if g_cols[3].button("🗑️", key=f"del_g_{row['id']}", help="删除此目标"):
+                        if delete_dad_fitness_goal(row['id']):
+                            st.rerun()
+                    st.divider()
+
             st.subheader('📅 健身计划')
             st.info('内容可以先为空，我后面会继续加入。')
             st.subheader('✅ 每次健身项目完成记录')
