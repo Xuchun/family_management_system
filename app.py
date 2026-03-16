@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.9"
+VERSION = "9.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -26,9 +26,15 @@ def hash_password(password):
     salt = "family_mgmt_salt_2026"
     return hashlib.sha256((password + salt).encode()).hexdigest()
 
-def verify_password(password, hashed):
-    """校验输入的密码与数据库中的哈希是否匹配"""
-    return hash_password(password) == hashed
+def verify_password(password, stored_val):
+    """校验输入的密码与数据库中的值是否匹配 (兼容旧版哈希和新版明文)"""
+    # 1. 尝试比对 SHA256 哈希 (旧版数据)
+    if hash_password(password) == stored_val:
+        return True
+    # 2. 尝试明文比对 (新版数据)
+    if str(password) == str(stored_val):
+        return True
+    return False
 
 # --- 1. Streamlit UI Config (Must be FIRST) ---
 st.set_page_config(
@@ -241,12 +247,12 @@ def get_app_password():
     return app_pwd # 备选方案：返回环境变量里的值
 
 def update_app_password(new_pwd):
-    """更新数据库中的密码（以哈希形式存储，杜绝明文）"""
+    """更新数据库中的密码 (应用户要求直接存明文以便在设置中清晰显示)"""
     try:
-        hashed = hash_password(str(new_pwd))
+        # 直接存储明文，不再使用哈希
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
-            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (hashed,))
+            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES ('app_password', ?)", (str(new_pwd),))
             conn.commit()
             return True
     except:
