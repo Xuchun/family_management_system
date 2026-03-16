@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.0"
+VERSION = "11.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2061,9 +2061,9 @@ try:
                     with p_row_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['plan_content']}</div>", unsafe_allow_html=True)
                     with p_row_cols[2]:
-                        if st.button("✏️", key=f"edit_p_{row['id']}"):
-                            st.session_state["plan_to_edit"] = row.to_dict()
-                            st.rerun()
+                        def trigger_plan_edit(r):
+                            st.session_state["plan_to_edit"] = r
+                        st.button("✏️", key=f"edit_p_{row['id']}", on_click=trigger_plan_edit, args=(row.to_dict(),))
                     with p_row_cols[3]:
                         if st.button("🗑️", key=f"del_p_{row['id']}"):
                             if delete_dad_fitness_plan(row['id']): st.rerun()
@@ -2133,11 +2133,11 @@ try:
                     with t_row_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
                     with t_row_cols[2]:
-                        if st.button("✏️", key=f"edit_t_{row['id']}"):
-                            st.session_state["train_to_edit"] = row.to_dict()
-                            st.session_state["t_day_inp"] = row['train_day']
-                            st.session_state["t_content_inp"] = row['train_content']
-                            st.rerun()
+                        def trigger_train_edit(r):
+                            st.session_state["train_to_edit"] = r
+                            st.session_state["t_day_inp"] = r['train_day']
+                            st.session_state["t_content_inp"] = r['train_content']
+                        st.button("✏️", key=f"edit_t_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
                     with t_row_cols[3]:
                         if st.button("🗑️", key=f"del_t_{row['id']}"):
                             if delete_dad_training_detail(row['id']):
