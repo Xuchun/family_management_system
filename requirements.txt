@@ -4,3 +4,5 @@ pytz
 openai
 python-dotenv
 extra-streamlit-components
+requests
+cryptography
