@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.3"
+VERSION = "9.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -293,11 +293,19 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
     try:
         # --- 任务 A: 调度解析 (AI 需感知全文以确定时间) ---
         prompt_info = f"""
-        你是精密调度器。今天是 {now.strftime('%Y-%m-%d')}。
-        请从全文中分析截止日期和循环模式。
+        你是一位极其严谨的精密调度专家。今天是 {now.strftime('%Y-%m-%d')}。
+        
+        你的任务：从提供的“全文”中分析截止日期（date）和循环模式（recur）。
+        
+        【重要判别准则】：
+        1. 必须区分“描述性语言”与“调度意图”。
+           - 如果用户说“检查每日同步报告”，其中的“每日”是报告属性，不是任务频率。
+           - 如果用户指明了具体时间（如“明天早上9点”、“3月20日”），这通常是一个“None”循环的一次性任务。
+        2. 只有明确要求“每天/每周/每月都要做”时，才设置 recur。
+        
         全文："{task_text}"
         备选值：date={f_date}, recur={f_recur}
-        返回 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "..." }}
+        返回 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/daily/weekly/monthly/..." }}
         """
         res_info = client.chat.completions.create(
             model="gpt-4o",
