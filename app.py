@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import base64
 from datetime import datetime, timedelta
 import pytz
 import os
@@ -17,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "7.1"
+VERSION = "8.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -88,7 +89,7 @@ if not os.path.exists("data"):
 DB_FILE = "data/tasks.db"
 
 # --- 4. Google Drive Backup Engine (via Apps Script Bridge) ---
-def backup_to_gdrive(content_str, filename, overwrite=False):
+def backup_to_gdrive(content_str, filename, overwrite=False, is_binary=False):
     # 清理 URL (防止 .env 里的引号或空格干扰)
     url = g_script_url.strip("'\" ") if g_script_url else None
     
@@ -99,10 +100,11 @@ def backup_to_gdrive(content_str, filename, overwrite=False):
         payload = {
             "filename": filename,
             "content": content_str,
-            "overwrite": overwrite  # v7.0 新增标识，请求 Google 脚本执行覆盖操作
+            "overwrite": overwrite,
+            "is_binary": is_binary # v8.0 支持二进制文件传输
         }
         # Google Script 会进行 302 重定向，requests 默认会自动跟随
-        response = requests.post(url, json=payload, timeout=30, allow_redirects=True)
+        response = requests.post(url, json=payload, timeout=45, allow_redirects=True)
         
         if response.status_code == 200:
             if "Success" in response.text:
@@ -118,18 +120,25 @@ def backup_to_gdrive(content_str, filename, overwrite=False):
 
 def trigger_realtime_backup():
     """
-    v7.1 - 实时增量备份引擎 (RTK: Real-Time Kinetic)
-    强制单文件覆盖协议。确保 Google Drive 只有一份顶层的更新文件。
+    v8.0 - “双壳”实时容灾引擎 (Double-Hull Disaster Recovery)
+    强制同步：1. 实时文本报告 (realtime_backup.txt)  2. 实时数据库文件 (tasks.db)
     """
     def _async_backup():
         try:
-            # 加入实时备份的水印，方便辨认
-            content = generate_master_report()
-            content += f"\n\n[🛰️ RTK 模式实时增量备份] 覆盖时间: {get_now_sgt().strftime('%H:%M:%S')}"
-            # v7.1 强化 Singleton 模式
-            backup_to_gdrive(content, "realtime_backup.txt", overwrite=True)
-        except:
-            pass 
+            # 1. 同步文本报告
+            report_content = generate_master_report()
+            report_content += f"\n\n[🛰️ RTK 模式实时增量备份] 覆盖时间: {get_now_sgt().strftime('%H:%M:%S')}"
+            backup_to_gdrive(report_content, "realtime_backup.txt", overwrite=True, is_binary=False)
+            
+            # 2. 同步二进制数据库 (Base64 编码)
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, "rb") as f:
+                    db_bytes = f.read()
+                    db_b64 = base64.b64encode(db_bytes).decode('utf-8')
+                backup_to_gdrive(db_b64, "tasks.db", overwrite=True, is_binary=True)
+        except Exception as e:
+            # 后台任务，失败记录但不阻塞 UI
+            print(f"Real-time backup failed: {e}")
     threading.Thread(target=_async_backup, daemon=True).start()
 
 # --- 4. Database Functions ---
