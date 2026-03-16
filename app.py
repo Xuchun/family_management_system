@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "9.7.6"
+VERSION = "9.7.7"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1652,8 +1652,8 @@ try:
                         st.toast(msg_text, icon="✨")
                     elif msg_type == "success":
                         st.success(msg_text)
-                        time.sleep(5)
-                        st.empty() # 5秒后自动消除
+                        time.sleep(1)
+                        st.empty() # 1秒后自动消除
                     elif msg_type == "warning":
                         st.warning(msg_text)
 
