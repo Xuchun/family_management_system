@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "10.0"
+VERSION = "10.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1776,8 +1776,10 @@ try:
                                       placeholder="如：早饭", key="d_name_inp", label_visibility="collapsed")
             with cols_d_inp[1]:
                 st.markdown("<b>饮食内容</b>", unsafe_allow_html=True)
-                d_content = st.text_input("饮食内容", value=(diet_to_edit['meal_content'] if diet_to_edit else ""), 
-                                         placeholder="输入具体饮食...", key="d_content_inp", label_visibility="collapsed")
+                # 🛠️ v10.1 改为 text_area 以支持多行输入 (回车换行)
+                d_content = st.text_area("饮食内容", value=(diet_to_edit['meal_content'] if diet_to_edit else ""), 
+                                         placeholder="输入具体饮食内容，允许回车换行...", 
+                                         height=80, key="d_content_inp", label_visibility="collapsed")
             
             def handle_diet_add():
                 name = st.session_state.get("d_name_inp", "").strip()
@@ -1838,7 +1840,8 @@ try:
                     with d_row_cols[0]:
                         st.markdown(f"<div style='padding-top: 4px;'><b>{row['meal_name']}</b></div>", unsafe_allow_html=True)
                     with d_row_cols[1]:
-                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem;'>{row['meal_content']}</div>", unsafe_allow_html=True)
+                        # 🛠️ v10.1 这里的 white-space: pre-wrap 保证了多行输入能正确换行显示
+                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['meal_content']}</div>", unsafe_allow_html=True)
                     
                     def trigger_diet_edit(r):
                         st.session_state["diet_to_edit"] = r
