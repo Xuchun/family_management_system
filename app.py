@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet
 
 import re
 
-VERSION = "8.5"
+VERSION = "8.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1235,14 +1235,21 @@ try:
     # CSS to style the download button in the header
     st.markdown("""
         <style>
-        /* v8.4 System Menu Button Styling */
+        /* v8.6 System Menu Button Optimization */
+        div.stPopover {
+            text-align: right !important; /* 使 Popover 容器整体向右对齐 */
+        }
         div.stPopover > button {
             background-color: #ff8c00 !important; /* Sunset Orange */
             color: white !important;
             font-weight: 600 !important;
             border-radius: 8px !important;
             border: none !important;
-            height: 42px !important;
+            height: 38px !important; /* 稍微减小高度更显精致 */
+            width: auto !important; /* 强制适应内容宽度 */
+            min-width: unset !important;
+            padding: 0px 15px !important; /* 紧凑内边距 */
+            white-space: nowrap !important; /* 确保文字不折行 */
             transition: all 0.3s ease !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
@@ -1278,8 +1285,8 @@ try:
         st.session_state["authenticated"] = False
         st.session_state["manual_logout"] = True
 
-    # Header Row
-    c_title, c_menu = st.columns([0.7, 0.3], vertical_alignment="center")
+    # Header Row - 调整比例并让菜单靠右
+    c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动备份，给予一个小提示
@@ -1289,7 +1296,8 @@ try:
                 st.toast(st.session_state.pop(msg_key), icon="🤖")
 
     with c_menu:
-        with st.popover("⚙️ 系统功能菜单", use_container_width=True):
+        # v8.6 - 取消 use_container_width 以实现紧凑宽度
+        with st.popover("⚙️ 系统功能菜单", use_container_width=False):
             st.markdown("### 🛠️ 快速操作")
             
             # 1. 云端同步 (实时)
