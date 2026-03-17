@@ -1205,6 +1205,39 @@ st.markdown("""
         font-weight: 600 !important;
         color: #4b5563 !important;
     }
+
+    /* 🎨 v11.9: Custom Premium Tab-style Radio Buttons */
+    div[data-testid="stRadio"] > div[role="radiogroup"] {
+        flex-direction: row !important;
+        justify-content: center;
+        gap: 30px;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 0px;
+        margin-bottom: 20px;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label {
+        padding: 5px 15px !important;
+        margin: 0 !important;
+        border-radius: 8px 8px 0 0 !important;
+        transition: all 0.2s ease-in-out;
+        border-bottom: 3px solid transparent !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label:hover {
+        background-color: rgba(30, 58, 138, 0.05) !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label[data-checked="true"] {
+        border-bottom: 3px solid #1e3a8a !important;
+        background-color: rgba(30, 58, 138, 0.08) !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label[data-checked="true"] p {
+        color: #1e3a8a !important;
+        font-weight: 700 !important;
+    }
+    /* Hide the radio circles/dots */
+    div[data-testid="stRadio"] div[role="radiogroup"] [data-testid="stRadioDeselectedIndicator"],
+    div[data-testid="stRadio"] div[role="radiogroup"] [data-testid="stRadioSelectedIndicator"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1637,7 +1670,7 @@ try:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
             # 1. 云端备份 (手动)
-            if st.button("☁️ 云端数据备份", use_container_width=True, help="同时备份文本报告和数据库"):
+            if st.button("☁️ 手动云端数据备份", use_container_width=True, help="同时备份文本报告和数据库"):
                 with st.spinner("备份中..."):
                     trigger_manual_backup()
                     st.toast("✅ 手动备份任务已在后台启动！", icon="🚀")
@@ -1729,16 +1762,23 @@ try:
         st.write(f"**当前版本**: v{VERSION} | **数据库**: `{os.path.basename(DB_FILE)}`")
         
     else:
-        # --- 标准主控制台视图 ---
-        top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'], key="main_nav_tabs")
+        # --- 🌐 核心导航逻辑 (v11.9 采用 SessionState 显式控制，解决跳转问题) ---
+        nav_options = ['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康']
+        if "active_nav_tab" not in st.session_state:
+            st.session_state["active_nav_tab"] = nav_options[0]
 
-        # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
-        # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
-        # but we can use st.session_state with anchor or just rely on the manual selection for now 
-        # as Streamlit tabs preserve state well. To force focus, we'd need a different approach, 
-        # but for now renaming and grouping is the priority.]
+        # 渲染自定义标签栏
+        selected_tab = st.radio(
+            "Navigation",
+            options=nav_options,
+            index=nav_options.index(st.session_state["active_nav_tab"]),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="main_nav_radio_v11.9"
+        )
+        st.session_state["active_nav_tab"] = selected_tab
 
-        with top_tab1:
+        if selected_tab == '📝 家庭事项':
 
             def generate_txt_report():
                 # 为了保持 100% 一致，现在 Download 按钮直接调用统一的系统备份报告函数
@@ -1830,7 +1870,7 @@ try:
                         is_shade = bool(row.get('_is_shadow', False))
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
-        with top_tab2:
+        elif selected_tab == '🏋️‍♂️ 爸爸的健身':
             st.subheader('🎯 健身目标（同龄人5-10%）')
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
@@ -2198,7 +2238,7 @@ try:
             st.subheader('✅ 每次健身项目完成记录')
             st.info('内容可以先为空，我后面会继续加入。')
 
-        with top_tab3:
+        elif selected_tab == '🌸 恩雅的健康':
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
             
             health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"], key="health_nav_tabs")
