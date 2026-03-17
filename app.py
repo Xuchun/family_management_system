@@ -9,14 +9,14 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
-import json
+import json 
 import requests
 import time
 import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.2"
+VERSION = "11.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -47,20 +47,43 @@ cookie_manager = stx.CookieManager(key="family_auth_mgr_v2")
 
 # --- 3. Environment & Global Config ---
 load_dotenv()
-try:
-    api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
-    app_pwd = st.secrets["APP_PASSWORD"] if "APP_PASSWORD" in st.secrets else os.getenv("APP_PASSWORD")
-    g_script_url = st.secrets["GOOGLE_BACKUP_URL"] if "GOOGLE_BACKUP_URL" in st.secrets else os.getenv("GOOGLE_BACKUP_URL")
-    g_client_id = st.secrets["GOOGLE_CLIENT_ID"] if "GOOGLE_CLIENT_ID" in st.secrets else os.getenv("GOOGLE_CLIENT_ID")
-    g_client_secret = st.secrets["GOOGLE_CLIENT_SECRET"] if "GOOGLE_CLIENT_SECRET" in st.secrets else os.getenv("GOOGLE_CLIENT_SECRET")
-    db_enc_key = st.secrets["DB_ENCRYPTION_KEY"] if "DB_ENCRYPTION_KEY" in st.secrets else os.getenv("DB_ENCRYPTION_KEY")
-except Exception:
-    api_key = os.getenv("OPENAI_API_KEY")
-    app_pwd = os.getenv("APP_PASSWORD")
-    g_script_url = os.getenv("GOOGLE_BACKUP_URL")
-    g_client_id = os.getenv("GOOGLE_CLIENT_ID")
-    g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-    db_enc_key = os.getenv("DB_ENCRYPTION_KEY")
+# --- 3.5 Encryption Manager (修复 Ln 74/80 报错) ---
+def get_cipher_suite():
+    # 优先使用 st.secrets (Streamlit Cloud)，其次使用 .env 文件
+    key = None
+    try:
+        if "DB_ENCRYPTION_KEY" in st.secrets:
+            key = st.secrets["DB_ENCRYPTION_KEY"]
+    except Exception:
+        pass
+        
+    if not key:
+        key = os.getenv("DB_ENCRYPTION_KEY")
+        
+    if not key:
+        # 如果都没有，则生成临时密钥以保证程序不崩溃
+        # 作为精英开发者，建议你之后将生成的 key 存入 .env
+        key = Fernet.generate_key().decode()
+    return Fernet(key.encode())
+
+# 彻底修复全局 cipher_suite 的初始化
+cipher_suite = get_cipher_suite()
+
+# 安全地从 st.secrets 或 os.getenv 获取配置
+def get_secret_or_env(key):
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.getenv(key)
+
+api_key = get_secret_or_env("OPENAI_API_KEY")
+app_pwd = get_secret_or_env("APP_PASSWORD")
+g_script_url = get_secret_or_env("GOOGLE_BACKUP_URL")
+g_client_id = get_secret_or_env("GOOGLE_CLIENT_ID")
+g_client_secret = get_secret_or_env("GOOGLE_CLIENT_SECRET")
+db_enc_key = get_secret_or_env("DB_ENCRYPTION_KEY")
 
 # --- 🔐 Encryption Logic ---
 # 确保密钥清理掉可能的换行符或空格
@@ -993,7 +1016,7 @@ def generate_master_report():
     # --- 🏋️‍♂️ 爸爸的健身档案 (v9.8 明确分类) ---
     lines.append(f"\n\n{'='*30} 🏋️‍♂️ 爸爸的健身档案 {'='*30}\n")
     
-    lines.append("\n【 🎯 健身目标（同龄人10%） 】\n")
+    lines.append("\n【 🎯 健身目标（同龄人5-10%） 】\n")
     g_df = get_dad_fitness_goals()
     if not g_df.empty:
         for _, r in g_df.iterrows():
@@ -1782,7 +1805,7 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         with top_tab2:
-            st.subheader('🎯 健身目标（同龄人10%）')
+            st.subheader('🎯 健身目标（同龄人5-10%）')
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
             goal_to_edit = st.session_state.get("goal_to_edit", None)
@@ -1895,11 +1918,11 @@ try:
                         st.session_state["g_val_inp"] = r['goal_value']
 
                     with g_cols[2]:
-                        st.button("✏️", key=f"edit_g_{row['id']}", help="修改此目标", 
+                        st.button("✏️", key=f"edit_fgoal_{row['id']}", help="修改此目标", 
                                   use_container_width=True, on_click=trigger_edit, args=(row.to_dict(),))
                     
                     with g_cols[3]:
-                        if st.button("🗑️", key=f"del_g_{row['id']}", help="删除此目标", use_container_width=True):
+                        if st.button("🗑️", key=f"del_fgoal_{row['id']}", help="删除此目标", use_container_width=True):
                             if delete_dad_fitness_goal(row['id']):
                                 trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                                 st.rerun()
@@ -2014,9 +2037,9 @@ try:
                         st.session_state["d_content_inp"] = r['meal_content']
 
                     with d_row_cols[2]:
-                        st.button("✏️", key=f"edit_d_{row['id']}", use_container_width=True, on_click=trigger_diet_edit, args=(row.to_dict(),))
+                        st.button("✏️", key=f"edit_fdiet_{row['id']}", use_container_width=True, on_click=trigger_diet_edit, args=(row.to_dict(),))
                     with d_row_cols[3]:
-                        if st.button("🗑️", key=f"del_d_{row['id']}", use_container_width=True):
+                        if st.button("🗑️", key=f"del_fdiet_{row['id']}", use_container_width=True):
                             if delete_dad_diet_plan(row['id']):
                                 trigger_realtime_backup()
                                 st.rerun()
@@ -2063,9 +2086,9 @@ try:
                     with p_row_cols[2]:
                         def trigger_plan_edit(r):
                             st.session_state["plan_to_edit"] = r
-                        st.button("✏️", key=f"edit_p_{row['id']}", on_click=trigger_plan_edit, args=(row.to_dict(),))
+                        st.button("✏️", key=f"edit_fplan_{row['id']}", on_click=trigger_plan_edit, args=(row.to_dict(),))
                     with p_row_cols[3]:
-                        if st.button("🗑️", key=f"del_p_{row['id']}"):
+                        if st.button("🗑️", key=f"del_fplan_{row['id']}"):
                             if delete_dad_fitness_plan(row['id']): st.rerun()
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
@@ -2137,9 +2160,9 @@ try:
                             st.session_state["train_to_edit"] = r
                             st.session_state["t_day_inp"] = r['train_day']
                             st.session_state["t_content_inp"] = r['train_content']
-                        st.button("✏️", key=f"edit_t_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
+                        st.button("✏️", key=f"edit_ftrain_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
                     with t_row_cols[3]:
-                        if st.button("🗑️", key=f"del_t_{row['id']}"):
+                        if st.button("🗑️", key=f"del_ftrain_{row['id']}"):
                             if delete_dad_training_detail(row['id']):
                                 trigger_realtime_backup()
                                 st.rerun()
@@ -2234,7 +2257,7 @@ try:
                         p_cols[0].write(row['record_date'])
                         p_color = "#e11d48" if row['event_type'] == "月经开始" else "#059669"
                         p_cols[1].markdown(f"**<span style='color: {p_color};'>{row['event_type']}</span>**", unsafe_allow_html=True)
-                        if p_cols[2].button("🗑️", key=f"del_p_{row['id']}"):
+                        if p_cols[2].button("🗑️", key=f"del_per_{row['id']}"):
                             delete_enya_period(row['id'])
                             st.rerun()
                         st.divider()
