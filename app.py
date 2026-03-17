@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.3"
+VERSION = "11.9.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
