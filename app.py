@@ -1683,7 +1683,7 @@ try:
         st.info("💡 **核心提示**: 如果您在 Streamlit Cloud 重启后发现数据为空，请使用以下任意一种方式恢复。")
         
         # 将原 Data Recovery 逻辑移入此处
-        recovery_tab1, recovery_tab2 = st.tabs(["🧬 路径 A: 二进制恢复 (.db)", "📝 路径 B: 文本报告还原 (.txt)"])
+        recovery_tab1, recovery_tab2 = st.tabs(["🧬 路径 A: 二进制恢复 (.db)", "📝 路径 B: 文本报告还原 (.txt)"], key="system_recovery_tabs")
         
         with recovery_tab1:
             st.markdown("### 🧬 二进制数据库恢复 (推荐)")
@@ -1730,7 +1730,7 @@ try:
         
     else:
         # --- 标准主控制台视图 ---
-        top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'])
+        top_tab1, top_tab2, top_tab3 = st.tabs(['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康'], key="main_nav_tabs")
 
         # 逻辑：如果用户是从下拉菜单点的“数据恢复”，此时 default_tab_idx 会是 4，st.tabs 默认会选中它
         # [Streamlit docs Note: st.tabs doesn't have a direct 'index' param in some versions, 
@@ -2201,7 +2201,7 @@ try:
         with top_tab3:
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
             
-            health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"])
+            health_sub1, health_sub2 = st.tabs(["📏 身高体重记录", "📅 月经记录"], key="health_nav_tabs")
             
             with health_sub1:
                 st.markdown("### 📊 新增记录")
