@@ -1961,8 +1961,7 @@ try:
             cols_d_inp = st.columns([0.25, 0.55, 0.2])
             
             with cols_d_inp[0]:
-                st.markdown("<b>餐段名称</b>", unsafe_allow_html=True)
-                d_name = st.text_input("餐段名称", value=(diet_to_edit['meal_name'] if diet_to_edit else ""), 
+                d_name = st.text_input("餐段名称", 
                                       placeholder="如：早饭", key="d_name_inp", label_visibility="collapsed")
             with cols_d_inp[1]:
                 st.markdown("<b>饮食内容</b>", unsafe_allow_html=True)
@@ -1978,7 +1977,7 @@ try:
                 # 限制最大高度
                 dynamic_h = min(400, dynamic_h)
 
-                d_content = st.text_area("饮食内容", value=(diet_to_edit['meal_content'] if diet_to_edit else ""), 
+                d_content = st.text_area("饮食内容", 
                                          placeholder="输入具体饮食内容，允许回车换行...", 
                                          height=dynamic_h, key="d_content_inp", label_visibility="collapsed")
                 
@@ -2080,12 +2079,12 @@ try:
             if plan_to_edit:
                 cols_p_edit = st.columns([0.25, 0.55, 0.2])
                 with cols_p_edit[0]:
-                    p_name_val = st.text_input("计划名称", value=plan_to_edit['plan_name'], key="p_name_inp", label_visibility="collapsed")
+                    p_name_val = st.text_input("计划名称", key="p_name_inp", label_visibility="collapsed")
                 with cols_p_edit[1]:
                     curr_pe = st.session_state.get("p_content_inp", plan_to_edit['plan_content'])
                     pe_lines = curr_pe.count('\n') + 1
                     pe_h = min(400, max(40, pe_lines * 24 + 16))
-                    p_content_val = st.text_area("详细内容", value=plan_to_edit['plan_content'], height=pe_h, key="p_content_inp", label_visibility="collapsed")
+                    p_content_val = st.text_area("详细内容", height=pe_h, key="p_content_inp", label_visibility="collapsed")
                 with cols_p_edit[2]:
                     def handle_p_up(pid):
                         n = st.session_state.get("p_name_inp", "").strip()
@@ -2112,6 +2111,8 @@ try:
                     with p_row_cols[2]:
                         def trigger_plan_edit(r):
                             st.session_state["plan_to_edit"] = r
+                            st.session_state["p_name_inp"] = r['plan_name']
+                            st.session_state["p_content_inp"] = r['plan_content']
                         st.button("✏️", key=f"edit_fplan_{row['id']}", on_click=trigger_plan_edit, args=(row.to_dict(),))
                     with p_row_cols[3]:
                         if st.button("🗑️", key=f"del_fplan_{row['id']}"):
@@ -2126,7 +2127,7 @@ try:
             
             with cols_t_inp[0]:
                 st.markdown("<b>日期</b>", unsafe_allow_html=True)
-                t_day = st.text_input("日期", value=(train_to_edit['train_day'] if train_to_edit else ""), 
+                t_day = st.text_input("日期", 
                                       placeholder="如：周二", key="t_day_inp", label_visibility="collapsed")
             with cols_t_inp[1]:
                 st.markdown("<b>训练内容</b>", unsafe_allow_html=True)
@@ -2134,7 +2135,7 @@ try:
                 if not curr_t_val and train_to_edit: curr_t_val = train_to_edit['train_content']
                 t_lines = curr_t_val.count('\n') + 1
                 t_h = min(400, max(40, t_lines * 24 + 16))
-                t_content = st.text_area("训练内容", value=(train_to_edit['train_content'] if train_to_edit else ""), 
+                t_content = st.text_area("训练内容", 
                                          height=t_h, key="t_content_inp", label_visibility="collapsed")
 
             def handle_train_add():
