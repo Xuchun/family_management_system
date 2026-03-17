@@ -49,21 +49,21 @@ cookie_manager = stx.CookieManager(key="family_auth_mgr_v2")
 load_dotenv()
 # --- 3.5 Encryption Manager (修复 Ln 74/80 报错) ---
 def get_cipher_suite():
-    # 优先使用 st.secrets (Streamlit Cloud)，其次使用 .env 文件
-    key = None
-    try:
-        if "DB_ENCRYPTION_KEY" in st.secrets:
-            key = st.secrets["DB_ENCRYPTION_KEY"]
-    except Exception:
-        pass
-        
+    # 1. 尝试从 os.getenv 获取 (这是最稳妥的本地开发方式)
+    key = os.getenv("DB_ENCRYPTION_KEY")
+    
+    # 2. 如果环境变量没有，再尝试 st.secrets (为了部署到云端兼容)
     if not key:
-        key = os.getenv("DB_ENCRYPTION_KEY")
-        
+        try:
+            key = st.secrets.get("DB_ENCRYPTION_KEY")
+        except:
+            key = None
+            
+    # 3. 如果还是没有，生成临时密钥，确保 PhD 级的数据不被明文存储
     if not key:
-        # 如果都没有，则生成临时密钥以保证程序不崩溃
-        # 作为精英开发者，建议你之后将生成的 key 存入 .env
         key = Fernet.generate_key().decode()
+        # 这里建议你之后把生成的 key 手动存入你的 .env
+        
     return Fernet(key.encode())
 
 # 彻底修复全局 cipher_suite 的初始化
@@ -148,7 +148,7 @@ def backup_to_gdrive(content_str, filename, overwrite=False, is_binary=False):
 def trigger_realtime_backup():
     """
     v8.0 - “双壳”实时容灾引擎 (Double-Hull Disaster Recovery)
-    强制同步：1. 实时文本报告 (realtime_backup.txt)  2. 实时数据库文件 (tasks.db)
+    强制同步：1. 实时文本报告 (realtime_backup.txt)  2. 实时数据库 file (tasks.db)
     """
     def _async_backup():
         try:
@@ -167,6 +167,32 @@ def trigger_realtime_backup():
             # 后台任务，失败记录但不阻塞 UI
             print(f"Real-time backup failed: {e}")
     threading.Thread(target=_async_backup, daemon=True).start()
+
+def trigger_manual_backup():
+    """
+    Manual Backup - Timestamped files for user safety
+    """
+    def _async_manual_backup():
+        try:
+            now_str = get_now_sgt().strftime("%Y-%m-%d-%H%M")
+            txt_filename = f"manual_backup_{now_str}.txt"
+            db_filename = f"tasks_manual_backup_{now_str}.db"
+            
+            # 1. Manual Text Report
+            report_content = generate_master_report()
+            report_content += f"\n\n[🛡️ 手动数据备份] 备份时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M:%S')}"
+            backup_to_gdrive(report_content, txt_filename, overwrite=False, is_binary=False)
+            
+            # 2. Manual Binary Database (Base64 encoded)
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, "rb") as f:
+                    db_bytes = f.read()
+                    db_b64 = base64.b64encode(db_bytes).decode('utf-8')
+                backup_to_gdrive(db_b64, db_filename, overwrite=False, is_binary=True)
+        except Exception as e:
+            print(f"Manual backup failed: {e}")
+            
+    threading.Thread(target=_async_manual_backup, daemon=True).start()
 
 # --- 4. Database Functions ---
 def init_db():
@@ -1610,11 +1636,11 @@ try:
     with c_menu:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
-            # 1. 云端同步 (实时)
-            if st.button("☁️ 云端同步数据", use_container_width=True, help="同时同步文本报告和数据库"):
-                with st.spinner("同步中..."):
-                    trigger_realtime_backup()
-                    st.toast("✅ 双重同步任务已在后台启动！", icon="🚀")
+            # 1. 云端备份 (手动)
+            if st.button("☁️ 云端数据备份", use_container_width=True, help="同时备份文本报告和数据库"):
+                with st.spinner("备份中..."):
+                    trigger_manual_backup()
+                    st.toast("✅ 手动备份任务已在后台启动！", icon="🚀")
             
             # 2. 数据恢复 (v8.5 采用状态机驱动的模态导航)
             if st.button("🛡️ 进入数据恢复中心", use_container_width=True):
