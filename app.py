@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.9.3"
+VERSION = "11.9.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1961,6 +1961,12 @@ try:
                         margin-top: -15px !important;
                         margin-bottom: -15px !important;
                     }
+
+                    /* 🛠️ v11.9.1: 增大重量训练计划细节的行间距 */
+                    [data-testid="stVerticalBlock"] > div:has(.train-row-marker) {
+                        margin-top: 10px !important;
+                        margin-bottom: 10px !important;
+                    }
                     /* 按钮垂直对齐微调 */
                     .stButton button {
                         margin-top: 0px !important;
@@ -2158,6 +2164,83 @@ try:
                         if st.button("🗑️", key=f"del_fplan_{row['id']}"):
                             if delete_dad_fitness_plan(row['id']): st.rerun()
 
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+            st.subheader('🏋️ 重量训练计划细节')
+            
+            # --- 重量训练细节 CRUD (v11.0) ---
+            train_to_edit = st.session_state.get("train_to_edit", None)
+            cols_t_inp = st.columns([0.25, 0.55, 0.2])
+            
+            with cols_t_inp[0]:
+                st.markdown("<b>日期</b>", unsafe_allow_html=True)
+                t_day = st.text_input("日期", 
+                                      placeholder="如：周二", key="t_day_inp", label_visibility="collapsed")
+            with cols_t_inp[1]:
+                st.markdown("<b>训练内容</b>", unsafe_allow_html=True)
+                curr_t_val = st.session_state.get("t_content_inp", "")
+                if not curr_t_val and train_to_edit: curr_t_val = train_to_edit['train_content']
+                t_lines = curr_t_val.count('\n') + 1
+                t_h = min(400, max(40, t_lines * 24 + 16))
+                t_content = st.text_area("训练内容", 
+                                         height=t_h, key="t_content_inp", label_visibility="collapsed")
+
+            def handle_train_add():
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if add_dad_training_detail(d, c):
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+                        st.rerun()
+
+            def handle_train_update(tid):
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if update_dad_training_detail(tid, d, c):
+                        st.session_state.pop("train_to_edit", None)
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+                        st.rerun()
+
+            def handle_train_cancel():
+                st.session_state.pop("train_to_edit", None)
+                st.session_state["t_day_inp"] = ""
+                st.session_state["t_content_inp"] = ""
+
+            with cols_t_inp[2]:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
+                if train_to_edit:
+                    st.button("💾 更新", key="t_up_btn", use_container_width=True, on_click=handle_train_update, args=(train_to_edit['id'],))
+                    st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
+                else:
+                    st.button("➕ 添加", key="t_add_btn", use_container_width=True, on_click=handle_train_add)
+
+            # 显示训练细节列表
+            train_df = get_dad_training_details()
+            if not train_df.empty:
+                for _, row in train_df.iterrows():
+                    st.markdown("<div class='train-row-marker'></div>", unsafe_allow_html=True)
+                    t_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
+                    with t_row_cols[0]:
+                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['train_day']}</b></div>", unsafe_allow_html=True)
+                    with t_row_cols[1]:
+                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
+                    with t_row_cols[2]:
+                        def trigger_train_edit(r):
+                            st.session_state["train_to_edit"] = r
+                            st.session_state["t_day_inp"] = r['train_day']
+                            st.session_state["t_content_inp"] = r['train_content']
+                        st.button("✏️", key=f"edit_ftrain_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
+                    with t_row_cols[3]:
+                        if st.button("🗑️", key=f"del_ftrain_{row['id']}"):
+                            if delete_dad_training_detail(row['id']):
+                                trigger_realtime_backup()
+                                st.rerun()
+
+            st.markdown("<br>", unsafe_allow_html=True)
             st.subheader('✅ 每次健身项目完成记录')
             st.info('内容可以先为空，我后面会继续加入。')
 
