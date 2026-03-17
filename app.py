@@ -2006,6 +2006,7 @@ try:
             cols_d_inp = st.columns([0.25, 0.55, 0.2])
             
             with cols_d_inp[0]:
+                st.markdown("<b>时间</b>", unsafe_allow_html=True)
                 d_name = st.text_input("餐段名称", 
                                       placeholder="如：早饭", key="d_name_inp", label_visibility="collapsed")
             with cols_d_inp[1]:
