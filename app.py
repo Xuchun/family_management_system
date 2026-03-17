@@ -1957,10 +1957,15 @@ try:
                     /* 针对 row 下面的 div 间距 */
                     [data-testid="stVerticalBlock"] > div:has(.fitness-row-marker),
                     [data-testid="stVerticalBlock"] > div:has(.diet-row-marker),
-                    [data-testid="stVerticalBlock"] > div:has(.plan-row-marker),
-                    [data-testid="stVerticalBlock"] > div:has(.train-row-marker) {
+                    [data-testid="stVerticalBlock"] > div:has(.plan-row-marker) {
                         margin-top: -15px !important;
                         margin-bottom: -15px !important;
+                    }
+
+                    /* 🛠️ v11.9.1: 增大重量训练计划细节的行间距 */
+                    [data-testid="stVerticalBlock"] > div:has(.train-row-marker) {
+                        margin-top: 10px !important;
+                        margin-bottom: 10px !important;
                     }
                     /* 按钮垂直对齐微调 */
                     .stButton button {
