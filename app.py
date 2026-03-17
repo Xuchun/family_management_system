@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.9.4"
+VERSION = "11.9.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2148,10 +2148,6 @@ try:
             plan_df = get_dad_fitness_plans()
             if not plan_df.empty:
                 for _, row in plan_df.iterrows():
-                    # 🛠️ v11.9.4: 跳过“总体计划”，它将被移动到“重量训练计划细节”的最上方
-                    if row['plan_name'] == '总体计划':
-                        continue
-                        
                     st.markdown("<div class='plan-row-marker'></div>", unsafe_allow_html=True)
                     p_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
                     with p_row_cols[0]:
@@ -2170,29 +2166,6 @@ try:
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
             st.subheader('🏋️ 重量训练计划细节')
-            
-            # 🛠️ v11.9.4: 将“总体计划”挪动到此处作为第一行显示
-            plan_df_alt = get_dad_fitness_plans()
-            master_plan = plan_df_alt[plan_df_alt['plan_name'] == '总体计划']
-            if not master_plan.empty:
-                row_m = master_plan.iloc[0]
-                st.markdown("<div class='plan-row-marker'></div>", unsafe_allow_html=True)
-                p_m_cols = st.columns([0.2, 0.6, 0.1, 0.1])
-                with p_m_cols[0]:
-                    st.markdown(f"<div style='padding-top: 4px;'><b>{row_m['plan_name']}</b></div>", unsafe_allow_html=True)
-                with p_m_cols[1]:
-                    # 关键修改：内容也使用 <b> 标签加粗，保持与标题一致的感观
-                    st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'><b>{row_m['plan_content']}</b></div>", unsafe_allow_html=True)
-                with p_m_cols[2]:
-                    def trigger_master_edit(r):
-                        st.session_state["plan_to_edit"] = r
-                        st.session_state["p_name_inp"] = r['plan_name']
-                        st.session_state["p_content_inp"] = r['plan_content']
-                    st.button("✏️", key=f"edit_fplan_master_{row_m['id']}", on_click=trigger_master_edit, args=(row_m.to_dict(),))
-                with p_m_cols[3]:
-                    if st.button("🗑️", key=f"del_fplan_master_{row_m['id']}"):
-                        if delete_dad_fitness_plan(row_m['id']): st.rerun()
-                st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
             
             # --- 重量训练细节 CRUD (v11.0) ---
             train_to_edit = st.session_state.get("train_to_edit", None)
