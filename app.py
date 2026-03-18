@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.9"
+VERSION = "11.9.10"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2198,7 +2198,7 @@ try:
                 y_max = float(chart_data['体重(KG)'].max()) + 3.0
                 
                 chart = alt.Chart(chart_data).mark_line(point=True).encode(
-                    x=alt.X('日期:T', title='日期'),
+                    x=alt.X('日期:T', title='日期', axis=alt.Axis(format='%Y年%m月', labelAngle=-45)),
                     y=alt.Y('体重(KG):Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
                     tooltip=['日期', '体重(KG)']
                 ).properties(height=300).interactive()
@@ -2207,18 +2207,19 @@ try:
                 st.altair_chart(chart, use_container_width=True)
                 
                 # --- 历史数据控制行 (查看 & 下载) ---
-                ctrl_col1, ctrl_col2 = st.columns([0.5, 0.5])
+                ctrl_col1, ctrl_col2 = st.columns([0.65, 0.35])
                 with ctrl_col1:
                     show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
                 with ctrl_col2:
                     # 导出 CSV 逻辑 - 使用汉化后的列名进行排序
                     csv = chart_data.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    # 🛠️ v11.9.10: 更加紧凑的下载按钮，并放置在同一行
                     st.download_button(
-                        label="📥 下载 CSV 数据",
+                        label="下载历史体重数据(csv)",
                         data=csv,
                         file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
                         mime='text/csv',
-                        use_container_width=True
+                        use_container_width=False
                     )
 
                 if show_history:
