@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.7"
+VERSION = "11.9.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1113,15 +1113,6 @@ def generate_master_report():
     else:
         lines.append("尚无记录。\n")
 
-    # --- 📋 健身计划 (v10.4) ---
-    lines.append(f"\n\n{'='*30} 📋 爸爸的健身计划 {'='*30}\n")
-    fp_df = get_dad_fitness_plans()
-    if not fp_df.empty:
-        for _, r in fp_df.iterrows():
-            lines.append(f"【{r['plan_name']}】\n方案：{r['plan_content']}\n")
-    else:
-        lines.append("尚无记录。\n")
-
     # --- 🍽️ 饮食档案 (v10.0) ---
     lines.append(f"\n\n{'='*30} 🍽️ 爸爸的饮食档案 {'='*30}\n")
     d_df = get_dad_diet_plans()
@@ -2197,17 +2188,19 @@ try:
             # --- 体重趋势图表 ---
             weight_df = get_dad_weight_records()
             if not weight_df.empty:
+                # 🛠️ v11.9.8: 汉化图表字段
                 chart_data = weight_df.copy()
-                chart_data['record_date'] = pd.to_datetime(chart_data['record_date'])
+                chart_data = chart_data.rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                chart_data['日期'] = pd.to_datetime(chart_data['日期'])
                 
                 # 🛠️ v11.9.6: 使用 Altair 自定义纵坐标 (±3kg)
-                y_min = float(chart_data['weight'].min()) - 3.0
-                y_max = float(chart_data['weight'].max()) + 3.0
+                y_min = float(chart_data['体重(KG)'].min()) - 3.0
+                y_max = float(chart_data['体重(KG)'].max()) + 3.0
                 
                 chart = alt.Chart(chart_data).mark_line(point=True).encode(
-                    x=alt.X('record_date:T', title='日期'),
-                    y=alt.Y('weight:Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
-                    tooltip=['record_date', 'weight']
+                    x=alt.X('日期:T', title='日期'),
+                    y=alt.Y('体重(KG):Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
+                    tooltip=['日期', '体重(KG)']
                 ).properties(height=300).interactive()
                 
                 st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
@@ -2242,54 +2235,7 @@ try:
             else:
                 st.info("尚无体重记录，请在上方输入并添加。")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            st.subheader('📅 健身计划')
-            # 🛠️ v11.0 响应用户要求，去掉了“健身计划”和“总体计划”之间的输入区域
-            plan_to_edit = st.session_state.get("plan_to_edit", None)
-            
-            # 仅在编辑模式下显示输入框
-            if plan_to_edit:
-                cols_p_edit = st.columns([0.25, 0.55, 0.2])
-                with cols_p_edit[0]:
-                    p_name_val = st.text_input("计划名称", key="p_name_inp", label_visibility="collapsed")
-                with cols_p_edit[1]:
-                    curr_pe = st.session_state.get("p_content_inp", plan_to_edit['plan_content'])
-                    pe_lines = curr_pe.count('\n') + 1
-                    pe_h = min(400, max(40, pe_lines * 24 + 16))
-                    p_content_val = st.text_area("详细内容", height=pe_h, key="p_content_inp", label_visibility="collapsed")
-                with cols_p_edit[2]:
-                    def handle_p_up(pid):
-                        n = st.session_state.get("p_name_inp", "").strip()
-                        c = st.session_state.get("p_content_inp", "").strip()
-                        if n and c:
-                            if update_dad_fitness_plan(pid, n, c):
-                                st.session_state.pop("plan_to_edit", None)
-                                st.rerun()
-                    def handle_p_can():
-                        st.session_state.pop("plan_to_edit", None)
-                    st.button("💾 保存", key="p_save_btn_ed", on_click=handle_p_up, args=(plan_to_edit['id'],), use_container_width=True)
-                    st.button("取消", key="p_can_btn_ed", on_click=handle_p_can, use_container_width=True)
-
-            # 显示现有计划（总体计划等）
-            plan_df = get_dad_fitness_plans()
-            if not plan_df.empty:
-                for _, row in plan_df.iterrows():
-                    st.markdown("<div class='plan-row-marker'></div>", unsafe_allow_html=True)
-                    p_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
-                    with p_row_cols[0]:
-                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['plan_name']}</b></div>", unsafe_allow_html=True)
-                    with p_row_cols[1]:
-                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['plan_content']}</div>", unsafe_allow_html=True)
-                    with p_row_cols[2]:
-                        def trigger_plan_edit(r):
-                            st.session_state["plan_to_edit"] = r
-                            st.session_state["p_name_inp"] = r['plan_name']
-                            st.session_state["p_content_inp"] = r['plan_content']
-                        st.button("✏️", key=f"edit_fplan_{row['id']}", on_click=trigger_plan_edit, args=(row.to_dict(),))
-                    with p_row_cols[3]:
-                        if st.button("🗑️", key=f"del_fplan_{row['id']}"):
-                            if delete_dad_fitness_plan(row['id']): st.rerun()
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
             st.subheader('🏋️ 重量训练计划细节')
