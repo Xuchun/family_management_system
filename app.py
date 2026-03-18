@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.13"
+VERSION = "11.9.14"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1432,7 +1432,7 @@ try:
                     "state=family_admin_reset"
                 )
                 
-                st.link_button("🔑 使用 Gmail 管理员登录", google_auth_url, use_container_width=True)
+                st.link_button("🔑 使用 Gmail 管理员登录", google_auth_url, use_container_width=False)
             
             # --- 🛡️ 捕捉 Google 回调逻辑 ---
             q_params = st.query_params
@@ -1552,7 +1552,7 @@ try:
         else:
             st.error(f"❌ 添加失败：{result['error']}")
         
-        if st.button("确定", use_container_width=True):
+        if st.button("确定", use_container_width=False):
             st.rerun()
 
     if "last_add_result" in st.session_state:
@@ -1712,13 +1712,13 @@ try:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
             # 1. 云端备份 (手动)
-            if st.button("☁️ 手动云端数据备份", use_container_width=True, help="同时备份文本报告和数据库"):
+            if st.button("☁️ 手动云端数据备份", use_container_width=False, help="同时备份文本报告和数据库"):
                 with st.spinner("备份中..."):
                     trigger_manual_backup()
                     st.toast("✅ 手动备份任务已在后台启动！", icon="🚀")
             
             # 2. 数据恢复 (v8.5 采用状态机驱动的模态导航)
-            if st.button("🛡️ 进入数据恢复中心", use_container_width=True):
+            if st.button("🛡️ 进入数据恢复中心", use_container_width=False):
                 st.session_state["show_recovery_center"] = True
                 st.rerun()
 
@@ -1729,7 +1729,7 @@ try:
                 curr_p = get_app_password()
                 st.write(f"当前 6 位访问密码: **{curr_p}**")
                 new_p = st.text_input("设置新密码 (6位数字):", type="password", max_chars=6, key="menu_new_pass")
-                if st.button("更新密码", use_container_width=True, key="menu_update_pass_btn"):
+                if st.button("更新密码", use_container_width=False, key="menu_update_pass_btn"):
                     if len(new_p) == 6 and new_p.isdigit():
                         if update_app_password(new_p):
                             st.success("密码已更新！")
@@ -1740,7 +1740,7 @@ try:
 
             st.markdown("---")
             # 4. 退出登录
-            st.button("🔴 退出登录", use_container_width=True, on_click=handle_logout, key="menu_logout_btn")
+            st.button("🔴 退出登录", use_container_width=False, on_click=handle_logout, key="menu_logout_btn")
 
     st.markdown('<br>', unsafe_allow_html=True)
     
@@ -1751,7 +1751,7 @@ try:
         with tc1:
             st.markdown("## 🛡️ 数据恢复中心 (救生艇模式)")
         with tc2:
-            if st.button("⬅️ 返回主控制台", use_container_width=True, type="primary"):
+            if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
                 st.rerun()
         
@@ -1770,7 +1770,7 @@ try:
             uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"], key="db_uploader_v85")
             if uploaded_db:
                 st.warning("⚠️ 确认后将覆盖所有当前数据。")
-                if st.button("🔥 立即执行二进制恢复", key="btn_bin_restore", use_container_width=True):
+                if st.button("🔥 立即执行二进制恢复", key="btn_bin_restore", use_container_width=False):
                     try:
                         if not os.path.exists("data"): os.makedirs("data")
                         with open(DB_FILE, "wb") as f:
@@ -1789,7 +1789,7 @@ try:
             3. **在此粘贴**: 贴入下方文本框。
             """)
             report_text = st.text_area("粘贴备份报告全文", height=300, key="report_paste_85")
-            if st.button("🧩 解析并还原数据", key="btn_text_restore", use_container_width=True):
+            if st.button("🧩 解析并还原数据", key="btn_text_restore", use_container_width=False):
                 if report_text:
                     try:
                         import_count = import_from_report_text(report_text)
@@ -1837,7 +1837,7 @@ try:
             with col_add_input:
                 st.text_input("➕ 新增事项:", placeholder="请输入需要添加的新事项，比如这周六下午4点去海滩...", key="input_new_task", label_visibility="collapsed")
             with col_add_btn:
-                if st.button("添加新事项", use_container_width=True, on_click=handle_add_cb):
+                if st.button("添加新事项", use_container_width=False, on_click=handle_add_cb):
                     pass
             with col_dl_btn:
                 if not tasks_df.empty:
@@ -1848,7 +1848,7 @@ try:
                         file_name=f"家庭事项清单_{get_now_sgt().strftime('%m%d_%H%M')}.txt",
                         mime="text/plain",
                         key="dl_btn_header_v1",
-                        use_container_width=True
+                        use_container_width=False
                     )
 
             task_to_add = st.session_state.get("temp_task_text")
@@ -1960,11 +1960,11 @@ try:
                 st.session_state["g_val_inp"] = ""
 
             if goal_to_edit:
-                cols_g[2].button("💾 更新", use_container_width=True, 
+                cols_g[2].button("💾 更新", use_container_width=False, 
                                 on_click=handle_update, args=(goal_to_edit['id'],))
                 st.button("取消修改", key="cancel_edit_goal", on_click=handle_cancel)
             else:
-                cols_g[2].button("➕ 添加", use_container_width=True, on_click=handle_add)
+                cols_g[2].button("➕ 添加", use_container_width=False, on_click=handle_add)
 
             # 🛠️ v9.7.3 消息显示占位符
             msg_ph = st.empty()
@@ -2032,10 +2032,10 @@ try:
 
                     with g_cols[2]:
                         st.button("✏️", key=f"edit_fgoal_{row['id']}", help="修改此目标", 
-                                  use_container_width=True, on_click=trigger_edit, args=(row.to_dict(),))
+                                  use_container_width=False, on_click=trigger_edit, args=(row.to_dict(),))
                     
                     with g_cols[3]:
-                        if st.button("🗑️", key=f"del_fgoal_{row['id']}", help="删除此目标", use_container_width=True):
+                        if st.button("🗑️", key=f"del_fgoal_{row['id']}", help="删除此目标", use_container_width=False):
                             if delete_dad_fitness_goal(row['id']):
                                 trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                                 st.rerun()
@@ -2114,10 +2114,10 @@ try:
             with cols_d_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True) # 🛠️ v10.3 占位符，使按钮与输入框对齐
                 if diet_to_edit:
-                    st.button("💾 更新", key="diet_update_btn", use_container_width=True, on_click=handle_diet_update, args=(diet_to_edit['id'],))
+                    st.button("💾 更新", key="diet_update_btn", use_container_width=False, on_click=handle_diet_update, args=(diet_to_edit['id'],))
                     st.button("取消", key="diet_cancel_btn", on_click=handle_diet_cancel)
                 else:
-                    st.button("➕ 添加", key="diet_add_btn", use_container_width=True, on_click=handle_diet_add)
+                    st.button("➕ 添加", key="diet_add_btn", use_container_width=False, on_click=handle_diet_add)
 
             # 消息显示
             diet_msg_ph = st.empty()
@@ -2150,9 +2150,9 @@ try:
                         st.session_state["d_content_inp"] = r['meal_content']
 
                     with d_row_cols[2]:
-                        st.button("✏️", key=f"edit_fdiet_{row['id']}", use_container_width=True, on_click=trigger_diet_edit, args=(row.to_dict(),))
+                        st.button("✏️", key=f"edit_fdiet_{row['id']}", use_container_width=False, on_click=trigger_diet_edit, args=(row.to_dict(),))
                     with d_row_cols[3]:
-                        if st.button("🗑️", key=f"del_fdiet_{row['id']}", use_container_width=True):
+                        if st.button("🗑️", key=f"del_fdiet_{row['id']}", use_container_width=False):
                             if delete_dad_diet_plan(row['id']):
                                 trigger_realtime_backup()
                                 st.rerun()
@@ -2163,8 +2163,8 @@ try:
             weight_df = get_dad_weight_records()
             st.subheader('⚖️ 体重记录')
             
-            # --- 体重记录新增逻辑 (v11.9.13: 按钮合并一行) ---
-            col_w1, col_w2, col_w3 = st.columns([0.22, 0.28, 0.5])
+            # --- 体重记录新增逻辑 (v11.9.14: 4列扁平化对齐 & 全局紧凑按钮) ---
+            col_w1, col_w2, col_w3, col_w4 = st.columns([0.22, 0.23, 0.18, 0.37])
             with col_w1:
                 st.markdown("<b>日期</b>", unsafe_allow_html=True)
                 w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
@@ -2173,7 +2173,6 @@ try:
                 w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=70.0, step=0.1, key="w_val_inp", label_visibility="collapsed")
             
             def handle_weight_add():
-                # Correctly handle date object and weight value
                 d = st.session_state.get("w_date_inp").strftime("%Y-%m-%d")
                 v = st.session_state.get("w_val_inp")
                 if add_dad_weight_record(d, v):
@@ -2182,23 +2181,22 @@ try:
             
             with col_w3:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
-                # 使用两个并排的紧凑按钮
-                btn_cols = st.columns([0.35, 0.65])
-                with btn_cols[0]:
-                    st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=True)
-                with btn_cols[1]:
-                    if not weight_df.empty:
-                        # 导出 CSV 逻辑
-                        export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
-                        csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
-                        st.download_button(
-                            label="下载历史体重数据(csv)",
-                            data=csv_data,
-                            file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
-                            mime='text/csv',
-                            use_container_width=True,
-                            key="row_weight_dl_v13"
-                        )
+                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=False)
+            
+            with col_w4:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
+                if not weight_df.empty:
+                    # 导出 CSV 逻辑
+                    export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                    csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="下载历史体重数据(csv)",
+                        data=csv_data,
+                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
+                        mime='text/csv',
+                        use_container_width=False,
+                        key="row_weight_dl_v14"
+                    )
             
             if "_weight_msg" in st.session_state:
                 m_type, m_txt = st.session_state.pop("_weight_msg")
@@ -2292,10 +2290,10 @@ try:
             with cols_t_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
                 if train_to_edit:
-                    st.button("💾 更新", key="t_up_btn", use_container_width=True, on_click=handle_train_update, args=(train_to_edit['id'],))
+                    st.button("💾 更新", key="t_up_btn", use_container_width=False, on_click=handle_train_update, args=(train_to_edit['id'],))
                     st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
                 else:
-                    st.button("➕ 添加", key="t_add_btn", use_container_width=True, on_click=handle_train_add)
+                    st.button("➕ 添加", key="t_add_btn", use_container_width=False, on_click=handle_train_add)
 
             # 显示训练细节列表
             train_df = get_dad_training_details()
@@ -2338,7 +2336,7 @@ try:
                 with cols_v[2]:
                     v_weight = st.number_input("体重 (kg)", min_value=0.0, step=0.1, key="v_weight_inp")
                 with cols_v[3]:
-                    if st.button("➕ 保存记录", use_container_width=True, key="v_save_btn"):
+                    if st.button("➕ 保存记录", use_container_width=False, key="v_save_btn"):
                         add_enya_vital(v_date.strftime("%Y-%m-%d"), v_height, v_weight)
                         st.success("记录已保存！")
                         st.rerun()
@@ -2368,7 +2366,7 @@ try:
                 with cols_p[1]:
                     p_type = st.selectbox("事件内容", ["月经开始", "月经结束"], key="p_type_inp")
                 with cols_p[2]:
-                    if st.button("➕ 保存记录", use_container_width=True, key="p_save_btn"):
+                    if st.button("➕ 保存记录", use_container_width=False, key="p_save_btn"):
                         add_enya_period(p_date.strftime("%Y-%m-%d"), p_type)
                         st.success("记录已保存！")
                         st.rerun()
@@ -2397,7 +2395,7 @@ try:
                             data=p_txt,
                             file_name=f"恩雅经期记录_{get_now_sgt().strftime('%m%d')}.txt",
                             mime="text/plain",
-                            use_container_width=True,
+                            use_container_width=False,
                             key="dl_period_btn"
                         )
 
