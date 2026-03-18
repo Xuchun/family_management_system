@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.11"
+VERSION = "11.9.12"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2227,7 +2227,7 @@ try:
                 st.altair_chart(chart, use_container_width=True)
                 
                 # --- 历史数据控制行 (仅保留查看开关) ---
-                show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
+                show_history = st.toggle("📜 表格显示历史体重数据", key="show_weight_history")
 
                 if show_history:
                     st.markdown("---")
