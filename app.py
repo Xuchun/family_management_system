@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.16"
+VERSION = "11.9.17"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -689,6 +689,22 @@ def get_tasks():
     if not df.empty:
         df['task'] = df['task'].apply(decrypt_str)
     return df
+
+def get_task_by_id(task_id):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("SELECT task, due_date, recurring_pattern FROM tasks WHERE id = ?", (task_id,))
+            row = c.fetchone()
+            if row:
+                return {
+                    "task": decrypt_str(row[0]),
+                    "due_date": row[1],
+                    "recurring_pattern": row[2]
+                }
+    except:
+        pass
+    return None
 
 def add_task(task_text):
     try:
@@ -1542,23 +1558,24 @@ try:
         except:
             return dt_str
 
-    @st.dialog("📋 事项添加结果")
-    def show_add_dialog(result):
+    @st.dialog("📋 事项处理结果")
+    def show_task_result_dialog(result):
+        mode_label = "添加" if result.get("mode") == "add" else "修改"
         if result["success"]:
-            st.success("✅ 该事项已成功入库！")
+            st.success(f"✅ 该事项已成功{mode_label}！")
             st.markdown(f"**内容：** {result['task']}")
-            if result['due']:
+            if result.get('due'):
                 st.markdown(f"**⏰ 日期/时间：** {format_date_with_weekday(result['due'])}")
-            if result['recur']:
+            if result.get('recur'):
                 st.markdown(f"**🔄 循环模式：** {result['recur']}")
         else:
-            st.error(f"❌ 添加失败：{result['error']}")
+            st.error(f"❌ {mode_label}失败：{result['error']}")
         
         if st.button("确定", use_container_width=False):
             st.rerun()
 
-    if "last_add_result" in st.session_state:
-        show_add_dialog(st.session_state.pop("last_add_result"))
+    if "last_task_result" in st.session_state:
+        show_task_result_dialog(st.session_state.pop("last_task_result"))
 
     def render_task(row, is_shadow=False, location="main", is_overdue=False):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
@@ -1598,7 +1615,17 @@ try:
                 new_text = c2.text_input("修改事项:", value=row['task'], key=f"inp_{location}_{row['id']}")
                 save_col, can_col = c3.columns(2)
                 if save_col.button("💾", key=f"save_{location}_{row['id']}", help="保存"):
-                    update_task_text(row['id'], new_text)
+                    if update_task_text(row['id'], new_text):
+                        # 🛠️ v11.9.17: 获取更新后的完整信息以显示确认弹窗
+                        updated_task = get_task_by_id(row['id'])
+                        if updated_task:
+                            st.session_state["last_task_result"] = {
+                                "success": True,
+                                "task": updated_task['task'],
+                                "due": updated_task['due_date'],
+                                "recur": updated_task['recurring_pattern'],
+                                "mode": "edit"
+                            }
                     st.session_state["editing_task_id"] = None
                     st.rerun()
                 if can_col.button("🚫", key=f"can_{location}_{row['id']}", help="取消"):
@@ -1857,7 +1884,10 @@ try:
             if task_to_add:
                 with st.spinner("AI 解析并提交中..."):
                     res = add_task(task_to_add)
-                    st.session_state["last_add_result"] = res
+                    # 🛠️ v11.9.17: 使用统一的 SessionState Key
+                    if isinstance(res, dict):
+                        res["mode"] = "add"
+                    st.session_state["last_task_result"] = res
                     st.session_state["temp_task_text"] = None
                     st.rerun()
 
