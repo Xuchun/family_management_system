@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.17"
+VERSION = "11.9.18"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -768,6 +768,7 @@ def update_task_text(task_id, new_text):
     conn.commit()
     conn.close()
     trigger_realtime_backup()
+    return True
 
 def mark_recurring_date_completed(task_id, date_str):
     conn = sqlite3.connect(DB_FILE)
