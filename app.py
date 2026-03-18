@@ -15,8 +15,9 @@ import time
 import threading
 import hashlib
 from cryptography.fernet import Fernet
+import altair as alt
 
-VERSION = "11.9.5"
+VERSION = "11.9.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2189,12 +2190,34 @@ try:
                 chart_data = weight_df.copy()
                 chart_data['record_date'] = pd.to_datetime(chart_data['record_date'])
                 
-                # 🛠️ v11.9.5: 使用 scatter_chart 显示体重趋势
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                st.scatter_chart(chart_data, x="record_date", y="weight", size=50)
+                # 🛠️ v11.9.6: 使用 Altair 自定义纵坐标 (±3kg)
+                y_min = float(chart_data['weight'].min()) - 3.0
+                y_max = float(chart_data['weight'].max()) + 3.0
                 
-                # --- 历史数据查看按钮 ---
-                show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
+                chart = alt.Chart(chart_data).mark_line(point=True).encode(
+                    x=alt.X('record_date:T', title='日期'),
+                    y=alt.Y('weight:Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
+                    tooltip=['record_date', 'weight']
+                ).properties(height=300).interactive()
+                
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                st.altair_chart(chart, use_container_width=True)
+                
+                # --- 历史数据控制行 (查看 & 下载) ---
+                ctrl_col1, ctrl_col2 = st.columns([0.5, 0.5])
+                with ctrl_col1:
+                    show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
+                with ctrl_col2:
+                    # 导出 CSV 逻辑
+                    csv = chart_data.sort_values(by="record_date", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📥 下载 CSV 数据",
+                        data=csv,
+                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
+                        mime='text/csv',
+                        use_container_width=True
+                    )
+
                 if show_history:
                     st.markdown("---")
                     hist_df = weight_df.sort_values(by="record_date", ascending=False)
