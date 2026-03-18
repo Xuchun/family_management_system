@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.12"
+VERSION = "11.9.13"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2159,30 +2159,12 @@ try:
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 🛠️ v11.9.11: 提前获取数据以在标题行显示下载按钮
+            # 提前获取数据以备下载使用
             weight_df = get_dad_weight_records()
-            head_col1, head_col2 = st.columns([0.6, 0.4])
-            with head_col1:
-                st.subheader('⚖️ 体重记录')
-            with head_col2:
-                if not weight_df.empty:
-                    # 提前准备 CSV 导出数据
-                    export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
-                    csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
-                    
-                    st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
-                    st.download_button(
-                        label="下载历史体重数据(csv)",
-                        data=csv_data,
-                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
-                        mime='text/csv',
-                        use_container_width=False,
-                        key="head_weight_dl"
-                    )
-                    st.markdown("</div>", unsafe_allow_html=True)
+            st.subheader('⚖️ 体重记录')
             
-            # --- 体重记录新增逻辑 ---
-            col_w1, col_w2, col_w3 = st.columns([0.3, 0.4, 0.3])
+            # --- 体重记录新增逻辑 (v11.9.13: 按钮合并一行) ---
+            col_w1, col_w2, col_w3 = st.columns([0.22, 0.28, 0.5])
             with col_w1:
                 st.markdown("<b>日期</b>", unsafe_allow_html=True)
                 w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
@@ -2200,7 +2182,23 @@ try:
             
             with col_w3:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
-                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=True)
+                # 使用两个并排的紧凑按钮
+                btn_cols = st.columns([0.35, 0.65])
+                with btn_cols[0]:
+                    st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=True)
+                with btn_cols[1]:
+                    if not weight_df.empty:
+                        # 导出 CSV 逻辑
+                        export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                        csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                        st.download_button(
+                            label="下载历史体重数据(csv)",
+                            data=csv_data,
+                            file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
+                            mime='text/csv',
+                            use_container_width=True,
+                            key="row_weight_dl_v13"
+                        )
             
             if "_weight_msg" in st.session_state:
                 m_type, m_txt = st.session_state.pop("_weight_msg")
