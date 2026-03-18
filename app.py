@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.15"
+VERSION = "11.9.16"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1153,11 +1153,13 @@ def run_auto_backup_logic(silent=True):
                 last_date = res[0] if res else ""
                 
                 if last_date != current_date:
-                    # 获取精确的时间戳字符串
-                    time_str = now.strftime("%Y-%m-%d-%H:%M")
-                    
                     # 1. 备份文本报告 (带日期时间的独立名称)
                     content = generate_master_report()
+                    # 🛠️ v11.9.16: 补全自动备份标识尾注，确保内容与手动备份 100% 一致
+                    content += f"\n\n[🤖 自动每日备份] 备份时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M:%S')}"
+                    
+                    # 🛠️ v11.9.16: 去除时间戳中的冒号，防止下载到本地时的文件名乱码/不兼容
+                    time_str = now.strftime("%Y-%m-%d-%H%M")
                     report_name = f"auto_daily_backup_{time_str}.txt"
                     backup_to_gdrive(content, report_name, overwrite=False, is_binary=False)
                     
