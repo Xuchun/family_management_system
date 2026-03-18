@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.21"
+VERSION = "11.9.22"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1735,21 +1735,27 @@ try:
             box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
             transform: translateY(-1px);
         }
+        /* v11.9.22: 统一所有按钮（普通按钮与下载按钮）的高度、边距与内部对齐，确保绝对水平平齐 */
+        div.stButton > button, div.stDownloadButton > button {
+            height: 40px !important;
+            margin: 0 !important;
+            padding: 0 15px !important;
+            line-height: normal !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 8px !important;
+            transition: all 0.2s ease !important;
+        }
         
-        div.header-dl-container div.stDownloadButton > button {
+        div.stDownloadButton > button {
             font-size: 15px !important;
             font-weight: 500 !important;
             color: #444 !important;
             background-color: #f0f2f6 !important;
             border: 1px solid #dcdde1 !important;
-            padding: 6px 12px !important;
-            /* v11.9.21: Removed legacy margin-top and fixed height to allow perfect alignment via vertical_alignment="bottom" */
-            border-radius: 8px !important;
-            transition: all 0.2s ease !important;
         }
-        div.stDownloadButton > button {
-            transition: all 0.2s ease !important;
-        }
+        
         div.stDownloadButton > button:hover {
             color: #ef4444 !important;
             border-color: #ef4444 !important;
@@ -1908,7 +1914,6 @@ try:
             with col_dl_btn:
                 if not tasks_df.empty:
                     txt_content = generate_txt_report()
-                    st.markdown('<div class="header-dl-container">', unsafe_allow_html=True)
                     st.download_button(
                         label="📥 下载事项清单",
                         data=txt_content,
@@ -1917,7 +1922,6 @@ try:
                         key="dl_btn_header_v1",
                         use_container_width=False
                     )
-                    st.markdown('</div>', unsafe_allow_html=True)
 
             task_to_add = st.session_state.get("temp_task_text")
             if task_to_add:
