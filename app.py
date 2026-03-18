@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.18"
+VERSION = "11.9.19"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -727,7 +727,7 @@ def add_task(task_text):
         if row:
             # 实时同步触发
             trigger_realtime_backup()
-            return {"success": True, "task": decrypt_str(row[0]), "due": row[1], "recur": recur_pattern}
+            return {"success": True, "task": decrypt_str(row[0]), "due": row[1], "recur": recur_pattern, "id": task_id}
         else:
             return {"success": False, "error": "数据库验证插入失败。"}
     except Exception as e:
@@ -769,6 +769,20 @@ def update_task_text(task_id, new_text):
     conn.close()
     trigger_realtime_backup()
     return True
+
+def update_task_raw(task_id, task_text, due_date, recur_pattern):
+    """v11.9.19 - 直接物理同步数据，不通过 AI 解析，用于撤销/回滚操作"""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            enc_task = encrypt_str(task_text)
+            c.execute("UPDATE tasks SET task = ?, due_date = ?, recurring_pattern = ? WHERE id = ?", 
+                      (enc_task, due_date, recur_pattern, task_id))
+            conn.commit()
+            trigger_realtime_backup()
+            return True
+    except:
+        return False
 
 def mark_recurring_date_completed(task_id, date_str):
     conn = sqlite3.connect(DB_FILE)
@@ -1561,7 +1575,9 @@ try:
 
     @st.dialog("📋 事项处理结果")
     def show_task_result_dialog(result):
-        mode_label = "添加" if result.get("mode") == "add" else "修改"
+        mode = result.get("mode")
+        mode_label = "添加" if mode == "add" else "修改"
+        
         if result["success"]:
             st.success(f"✅ 该事项已成功{mode_label}！")
             st.markdown(f"**内容：** {result['task']}")
@@ -1569,11 +1585,23 @@ try:
                 st.markdown(f"**⏰ 日期/时间：** {format_date_with_weekday(result['due'])}")
             if result.get('recur'):
                 st.markdown(f"**🔄 循环模式：** {result['recur']}")
+            
+            st.markdown("---")
+            c_btns = st.columns([1, 1])
+            with c_btns[0]:
+                if st.button("确认", type="primary", use_container_width=False, key="btn_confirm_task"):
+                    st.rerun()
+            with c_btns[1]:
+                if st.button("取消", use_container_width=False, key="btn_cancel_task"):
+                    if mode == "add":
+                        delete_task(result['id'])
+                    elif mode == "edit":
+                        update_task_raw(result['id'], result['old_task'], result['old_due'], result['old_recur'])
+                    st.rerun()
         else:
             st.error(f"❌ {mode_label}失败：{result['error']}")
-        
-        if st.button("确定", use_container_width=False):
-            st.rerun()
+            if st.button("确定", use_container_width=False):
+                st.rerun()
 
     if "last_task_result" in st.session_state:
         show_task_result_dialog(st.session_state.pop("last_task_result"))
@@ -1616,16 +1644,22 @@ try:
                 new_text = c2.text_input("修改事项:", value=row['task'], key=f"inp_{location}_{row['id']}")
                 save_col, can_col = c3.columns(2)
                 if save_col.button("💾", key=f"save_{location}_{row['id']}", help="保存"):
+                    # 🛠️ v11.9.19: 在修改前先行备份原始数据，以备“取消/撤销”使用
+                    old_data = get_task_by_id(row['id'])
                     if update_task_text(row['id'], new_text):
-                        # 🛠️ v11.9.17: 获取更新后的完整信息以显示确认弹窗
+                        # 获取更新后的完整信息以显示确认弹窗
                         updated_task = get_task_by_id(row['id'])
-                        if updated_task:
+                        if updated_task and old_data:
                             st.session_state["last_task_result"] = {
                                 "success": True,
                                 "task": updated_task['task'],
                                 "due": updated_task['due_date'],
                                 "recur": updated_task['recurring_pattern'],
-                                "mode": "edit"
+                                "id": row['id'],
+                                "mode": "edit",
+                                "old_task": old_data['task'],
+                                "old_due": old_data['due_date'],
+                                "old_recur": old_data['recurring_pattern']
                             }
                     st.session_state["editing_task_id"] = None
                     st.rerun()
