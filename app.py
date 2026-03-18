@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.6"
+VERSION = "11.9.7"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1088,6 +1088,16 @@ def generate_master_report():
     if not g_df.empty:
         for _, r in g_df.iterrows():
             lines.append(f"- {r['goal_name']}: {r['goal_value']}\n")
+    else:
+        lines.append("尚无记录。\n")
+    
+    lines.append("\n【 ⚖️ 体重记录过程 】\n")
+    w_df = get_dad_weight_records()
+    if not w_df.empty:
+        # 按时间倒序备份，最新记录在最前
+        w_df_desc = w_df.sort_values(by="record_date", ascending=False)
+        for _, r in w_df_desc.iterrows():
+            lines.append(f"- {r['record_date']}: {r['weight']} KG\n")
     else:
         lines.append("尚无记录。\n")
     
