@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.20"
+VERSION = "11.9.21"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1743,8 +1743,7 @@ try:
             background-color: #f0f2f6 !important;
             border: 1px solid #dcdde1 !important;
             padding: 6px 12px !important;
-            height: 42px !important;
-            margin-top: 30px !important; /* v11.9.20: Only apply 30px margin to header button */
+            /* v11.9.21: Removed legacy margin-top and fixed height to allow perfect alignment via vertical_alignment="bottom" */
             border-radius: 8px !important;
             transition: all 0.2s ease !important;
         }
