@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.14"
+VERSION = "11.9.15"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -293,7 +293,7 @@ def init_db():
         c.execute("INSERT INTO dad_fitness_plans (plan_name, plan_content) VALUES (?, ?)", 
                   (encrypt_str("总体计划"), encrypt_str("每周重量训练3次，有氧运动150分钟，HIIT/羽毛球训练1次")))
 
-    # 11. 爸爸的重量训练计划细节表 (v11.0)
+    # 11. 爸爸的每周运动细节表 (v11.0)
     c.execute('''CREATE TABLE IF NOT EXISTS dad_training_details
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   train_day TEXT NOT NULL,
@@ -2004,7 +2004,7 @@ try:
                         margin-bottom: -15px !important;
                     }
 
-                    /* 🛠️ v11.9.1: 增大重量训练计划细节的行间距 */
+                    /* 🛠️ v11.9.1: 增大每周运动细节的行间距 */
                     [data-testid="stVerticalBlock"] > div:has(.train-row-marker) {
                         margin-top: 10px !important;
                         margin-bottom: 10px !important;
@@ -2242,7 +2242,7 @@ try:
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-            st.subheader('🏋️ 重量训练计划细节')
+            st.subheader('🏋️ 每周运动细节')
             
             # --- 重量训练细节 CRUD (v11.0) ---
             train_to_edit = st.session_state.get("train_to_edit", None)
