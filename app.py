@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.8"
+VERSION = "11.9.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2211,8 +2211,8 @@ try:
                 with ctrl_col1:
                     show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
                 with ctrl_col2:
-                    # 导出 CSV 逻辑
-                    csv = chart_data.sort_values(by="record_date", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    # 导出 CSV 逻辑 - 使用汉化后的列名进行排序
+                    csv = chart_data.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
                     st.download_button(
                         label="📥 下载 CSV 数据",
                         data=csv,
