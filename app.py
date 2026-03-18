@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.10"
+VERSION = "11.9.11"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2158,7 +2158,28 @@ try:
                                 st.rerun()
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader('⚖️ 体重记录')
+            
+            # 🛠️ v11.9.11: 提前获取数据以在标题行显示下载按钮
+            weight_df = get_dad_weight_records()
+            head_col1, head_col2 = st.columns([0.6, 0.4])
+            with head_col1:
+                st.subheader('⚖️ 体重记录')
+            with head_col2:
+                if not weight_df.empty:
+                    # 提前准备 CSV 导出数据
+                    export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                    csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    
+                    st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
+                    st.download_button(
+                        label="下载历史体重数据(csv)",
+                        data=csv_data,
+                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
+                        mime='text/csv',
+                        use_container_width=False,
+                        key="head_weight_dl"
+                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
             
             # --- 体重记录新增逻辑 ---
             col_w1, col_w2, col_w3 = st.columns([0.3, 0.4, 0.3])
@@ -2186,7 +2207,6 @@ try:
                 if m_type == "toast": st.toast(m_txt, icon="⚖️")
 
             # --- 体重趋势图表 ---
-            weight_df = get_dad_weight_records()
             if not weight_df.empty:
                 # 🛠️ v11.9.8: 汉化图表字段
                 chart_data = weight_df.copy()
@@ -2206,21 +2226,8 @@ try:
                 st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
                 st.altair_chart(chart, use_container_width=True)
                 
-                # --- 历史数据控制行 (查看 & 下载) ---
-                ctrl_col1, ctrl_col2 = st.columns([0.65, 0.35])
-                with ctrl_col1:
-                    show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
-                with ctrl_col2:
-                    # 导出 CSV 逻辑 - 使用汉化后的列名进行排序
-                    csv = chart_data.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
-                    # 🛠️ v11.9.10: 更加紧凑的下载按钮，并放置在同一行
-                    st.download_button(
-                        label="下载历史体重数据(csv)",
-                        data=csv,
-                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
-                        mime='text/csv',
-                        use_container_width=False
-                    )
+                # --- 历史数据控制行 (仅保留查看开关) ---
+                show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
 
                 if show_history:
                     st.markdown("---")
