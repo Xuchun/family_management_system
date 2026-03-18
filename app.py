@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.19"
+VERSION = "11.9.20"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1736,7 +1736,7 @@ try:
             transform: translateY(-1px);
         }
         
-        div.stDownloadButton > button {
+        div.header-dl-container div.stDownloadButton > button {
             font-size: 15px !important;
             font-weight: 500 !important;
             color: #444 !important;
@@ -1744,8 +1744,11 @@ try:
             border: 1px solid #dcdde1 !important;
             padding: 6px 12px !important;
             height: 42px !important;
-            margin-top: 30px !important; /* Align with H1 baselineish */
+            margin-top: 30px !important; /* v11.9.20: Only apply 30px margin to header button */
             border-radius: 8px !important;
+            transition: all 0.2s ease !important;
+        }
+        div.stDownloadButton > button {
             transition: all 0.2s ease !important;
         }
         div.stDownloadButton > button:hover {
@@ -1906,6 +1909,7 @@ try:
             with col_dl_btn:
                 if not tasks_df.empty:
                     txt_content = generate_txt_report()
+                    st.markdown('<div class="header-dl-container">', unsafe_allow_html=True)
                     st.download_button(
                         label="📥 下载事项清单",
                         data=txt_content,
@@ -1914,6 +1918,7 @@ try:
                         key="dl_btn_header_v1",
                         use_container_width=False
                     )
+                    st.markdown('</div>', unsafe_allow_html=True)
 
             task_to_add = st.session_state.get("temp_task_text")
             if task_to_add:
@@ -2230,13 +2235,17 @@ try:
             weight_df = get_dad_weight_records()
             st.subheader('⚖️ 体重记录')
             
-            # --- 体重记录新增逻辑 (v11.9.14: 4列扁平化对齐 & 全局紧凑按钮) ---
-            col_w1, col_w2, col_w3, col_w4 = st.columns([0.22, 0.23, 0.18, 0.37])
+            # --- 🛠️ v11.9.20: 极致对齐：采用双行结构 + 底部基准对齐 ---
+            # 第 1 行：单独渲染文本标签
+            col_l1, col_l2, col_l3, col_l4 = st.columns([0.22, 0.23, 0.18, 0.37])
+            col_l1.markdown("<b>日期</b>", unsafe_allow_html=True)
+            col_l2.markdown("<b>体重 (KG)</b>", unsafe_allow_html=True)
+            
+            # 第 2 行：渲染交互组件，统一基准线 (bottom alignment)
+            col_w1, col_w2, col_w3, col_w4 = st.columns([0.22, 0.23, 0.18, 0.37], vertical_alignment="bottom")
             with col_w1:
-                st.markdown("<b>日期</b>", unsafe_allow_html=True)
                 w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
             with col_w2:
-                st.markdown("<b>体重 (KG)</b>", unsafe_allow_html=True)
                 w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=70.0, step=0.1, key="w_val_inp", label_visibility="collapsed")
             
             def handle_weight_add():
@@ -2247,11 +2256,9 @@ try:
                     trigger_realtime_backup()
             
             with col_w3:
-                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
-                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=False)
+                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=False, key="btn_w_add_v20")
             
             with col_w4:
-                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
                 if not weight_df.empty:
                     # 导出 CSV 逻辑
                     export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
@@ -2262,7 +2269,7 @@ try:
                         file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
                         mime='text/csv',
                         use_container_width=False,
-                        key="row_weight_dl_v14"
+                        key="row_weight_dl_v20"
                     )
             
             if "_weight_msg" in st.session_state:
