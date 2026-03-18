@@ -16,7 +16,7 @@ import threading
 import hashlib
 from cryptography.fernet import Fernet
 
-VERSION = "11.9.1"
+VERSION = "11.9.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -312,6 +312,13 @@ def init_db():
         for day, content in default_training:
             c.execute("INSERT INTO dad_training_details (train_day, train_content) VALUES (?, ?)", (encrypt_str(day), encrypt_str(content)))
 
+    # 12. 爸爸的体重记录表 (v11.9.5)
+    c.execute('''CREATE TABLE IF NOT EXISTS dad_weight_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  record_date TEXT NOT NULL,
+                  weight TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
     # 8. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
@@ -530,22 +537,55 @@ def add_dad_training_detail(day, content):
     except:
         return False
 
-def update_dad_training_detail(detail_id, day, content):
+def update_dad_training_detail(tid, day, content):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
             c.execute("UPDATE dad_training_details SET train_day = ?, train_content = ? WHERE id = ?", 
-                      (encrypt_str(day), encrypt_str(content), detail_id))
+                      (encrypt_str(day), encrypt_str(content), tid))
             conn.commit()
             return True
     except:
         return False
 
-def delete_dad_training_detail(detail_id):
+def delete_dad_training_detail(tid):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
-            c.execute("DELETE FROM dad_training_details WHERE id = ?", (detail_id,))
+            c.execute("DELETE FROM dad_training_details WHERE id = ?", (tid,))
+            conn.commit()
+            return True
+    except:
+        return False
+
+# --- 爸爸的体重记录管理 (v11.9.5) ---
+def get_dad_weight_records():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_weight_records ORDER BY record_date ASC", conn)
+            if not df.empty:
+                df['weight'] = df['weight'].apply(lambda x: float(decrypt_str(x)))
+            return df
+    except Exception as e:
+        print(f"Error getting weight records: {e}")
+        return pd.DataFrame()
+
+def add_dad_weight_record(date, weight):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO dad_weight_records (record_date, weight) VALUES (?, ?)", 
+                      (date, encrypt_str(str(weight))))
+            conn.commit()
+            return True
+    except:
+        return False
+
+def delete_dad_weight_record(rid):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM dad_weight_records WHERE id = ?", (rid,))
             conn.commit()
             return True
     except:
@@ -2115,6 +2155,60 @@ try:
                                 trigger_realtime_backup()
                                 st.rerun()
             
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader('⚖️ 体重记录')
+            
+            # --- 体重记录新增逻辑 ---
+            col_w1, col_w2, col_w3 = st.columns([0.3, 0.4, 0.3])
+            with col_w1:
+                st.markdown("<b>日期</b>", unsafe_allow_html=True)
+                w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
+            with col_w2:
+                st.markdown("<b>体重 (KG)</b>", unsafe_allow_html=True)
+                w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=70.0, step=0.1, key="w_val_inp", label_visibility="collapsed")
+            
+            def handle_weight_add():
+                # Correctly handle date object and weight value
+                d = st.session_state.get("w_date_inp").strftime("%Y-%m-%d")
+                v = st.session_state.get("w_val_inp")
+                if add_dad_weight_record(d, v):
+                    st.session_state["_weight_msg"] = ("toast", "✅ 体重记录已添加！")
+                    trigger_realtime_backup()
+            
+            with col_w3:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
+                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=True)
+            
+            if "_weight_msg" in st.session_state:
+                m_type, m_txt = st.session_state.pop("_weight_msg")
+                if m_type == "toast": st.toast(m_txt, icon="⚖️")
+
+            # --- 体重趋势图表 ---
+            weight_df = get_dad_weight_records()
+            if not weight_df.empty:
+                chart_data = weight_df.copy()
+                chart_data['record_date'] = pd.to_datetime(chart_data['record_date'])
+                
+                # 🛠️ v11.9.5: 使用 scatter_chart 显示体重趋势
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                st.scatter_chart(chart_data, x="record_date", y="weight", size=50)
+                
+                # --- 历史数据查看按钮 ---
+                show_history = st.toggle("📜 查看所有历史体重数据", key="show_weight_history")
+                if show_history:
+                    st.markdown("---")
+                    hist_df = weight_df.sort_values(by="record_date", ascending=False)
+                    for _, r in hist_df.iterrows():
+                        h_cols = st.columns([0.4, 0.4, 0.2])
+                        h_cols[0].write(f"📅 {r['record_date']}")
+                        h_cols[1].write(f"⚖️ {r['weight']} KG")
+                        if h_cols[2].button("🗑️", key=f"del_weight_{r['id']}", help="删除此记录"):
+                            if delete_dad_weight_record(r['id']):
+                                trigger_realtime_backup()
+                                st.rerun()
+            else:
+                st.info("尚无体重记录，请在上方输入并添加。")
+
             st.markdown("<br>", unsafe_allow_html=True)
 
             st.subheader('📅 健身计划')
