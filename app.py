@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.22"
+VERSION = "11.9.24"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1381,7 +1381,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.24</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1419,7 +1419,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.24</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1735,7 +1735,7 @@ try:
             box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
             transform: translateY(-1px);
         }
-        /* v11.9.22: 统一所有按钮（普通按钮与下载按钮）的高度、边距与内部对齐，确保绝对水平平齐 */
+        /* v11.9.24: 统一所有按钮（普通按钮与下载按钮）的高度、边距与内部对齐，确保绝对水平平齐 */
         div.stButton > button, div.stDownloadButton > button {
             height: 40px !important;
             margin: 0 !important;
@@ -1773,7 +1773,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.24</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["01am", "12pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1876,10 +1876,15 @@ try:
         st.write(f"**当前版本**: v{VERSION} | **数据库**: `{os.path.basename(DB_FILE)}`")
         
     else:
-        # --- 🌐 核心导航逻辑 (v11.9 采用 SessionState 显式控制，解决跳转问题) ---
+        # --- 🌐 核心导航逻辑 (v11.9.23: 引入 on_change 回调彻底解决跳转重置问题) ---
         nav_options = ['📝 家庭事项', '🏋️‍♂️ 爸爸的健身', '🌸 恩雅的健康']
         if "active_nav_tab" not in st.session_state:
             st.session_state["active_nav_tab"] = nav_options[0]
+
+        def handle_nav_change():
+            # 立即从 radio 的 key 中同步状态，确保 rerun 后 index 依然准确
+            if "main_nav_radio_v11.9" in st.session_state:
+                st.session_state["active_nav_tab"] = st.session_state["main_nav_radio_v11.9"]
 
         # 渲染自定义标签栏
         selected_tab = st.radio(
@@ -1888,7 +1893,8 @@ try:
             index=nav_options.index(st.session_state["active_nav_tab"]),
             horizontal=True,
             label_visibility="collapsed",
-            key="main_nav_radio_v11.9"
+            key="main_nav_radio_v11.9",
+            on_change=handle_nav_change
         )
         st.session_state["active_nav_tab"] = selected_tab
 
@@ -2033,6 +2039,7 @@ try:
                 st.session_state.pop("goal_to_edit", None)
                 st.session_state["g_name_inp"] = ""
                 st.session_state["g_val_inp"] = ""
+                st.rerun()
 
             if goal_to_edit:
                 cols_g[2].button("💾 更新", use_container_width=False, 
@@ -2091,6 +2098,13 @@ try:
                     </style>
                 """, unsafe_allow_html=True)
                 
+                # 🛠️ v11.9.24: 移出循环以确保响应性
+                def trigger_edit(r):
+                    st.session_state["goal_to_edit"] = r
+                    st.session_state["g_name_inp"] = r['goal_name']
+                    st.session_state["g_val_inp"] = r['goal_value']
+                    st.rerun()
+
                 for _, row in goals_df.iterrows():
                     # 标记这个 block 属于健身行
                     st.markdown("<div class='fitness-row-marker'></div>", unsafe_allow_html=True)
@@ -2100,11 +2114,6 @@ try:
                     with g_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px;'>{row['goal_value']}</div>", unsafe_allow_html=True)
                     
-                    def trigger_edit(r):
-                        st.session_state["goal_to_edit"] = r
-                        st.session_state["g_name_inp"] = r['goal_name']
-                        st.session_state["g_val_inp"] = r['goal_value']
-
                     with g_cols[2]:
                         st.button("✏️", key=f"edit_fgoal_{row['id']}", help="修改此目标", 
                                   use_container_width=False, on_click=trigger_edit, args=(row.to_dict(),))
@@ -2185,6 +2194,7 @@ try:
                 st.session_state.pop("diet_to_edit", None)
                 st.session_state["d_name_inp"] = ""
                 st.session_state["d_content_inp"] = ""
+                st.rerun()
 
             with cols_d_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True) # 🛠️ v10.3 占位符，使按钮与输入框对齐
@@ -2210,6 +2220,13 @@ try:
             diet_df = get_dad_diet_plans()
             if not diet_df.empty:
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                # 🛠️ v11.9.24: 移出循环以确保响应性
+                def trigger_diet_edit(r):
+                    st.session_state["diet_to_edit"] = r
+                    st.session_state["d_name_inp"] = r['meal_name']
+                    st.session_state["d_content_inp"] = r['meal_content']
+                    st.rerun()
+
                 for _, row in diet_df.iterrows():
                     st.markdown("<div class='diet-row-marker'></div>", unsafe_allow_html=True)
                     d_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
@@ -2219,11 +2236,6 @@ try:
                         # 🛠️ v10.1 这里的 white-space: pre-wrap 保证了多行输入能正确换行显示
                         st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['meal_content']}</div>", unsafe_allow_html=True)
                     
-                    def trigger_diet_edit(r):
-                        st.session_state["diet_to_edit"] = r
-                        st.session_state["d_name_inp"] = r['meal_name']
-                        st.session_state["d_content_inp"] = r['meal_content']
-
                     with d_row_cols[2]:
                         st.button("✏️", key=f"edit_fdiet_{row['id']}", use_container_width=False, on_click=trigger_diet_edit, args=(row.to_dict(),))
                     with d_row_cols[3]:
@@ -2319,7 +2331,25 @@ try:
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+            # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
+            st.markdown("<div id='training-edit-anchor'></div>", unsafe_allow_html=True)
             st.subheader('🏋️ 每周运动细节')
+            
+            if st.session_state.get("scroll_to_train_edit"):
+                st.session_state["scroll_to_train_edit"] = False
+                components.html("""
+                    <script>
+                        setTimeout(function() {
+                            var elements = window.parent.document.querySelectorAll('div[data-testid="stMarkdownContainer"]');
+                            for (var i = 0; i < elements.length; i++) {
+                                if (elements[i].innerText.includes("每周运动细节") || elements[i].innerHTML.includes("training-edit-anchor")) {
+                                    elements[i].scrollIntoView({behavior: "smooth", block: "start"});
+                                    break;
+                                }
+                            }
+                        }, 500);
+                    </script>
+                """, height=0)
             
             # --- 重量训练细节 CRUD (v11.0) ---
             train_to_edit = st.session_state.get("train_to_edit", None)
@@ -2363,6 +2393,7 @@ try:
                 st.session_state.pop("train_to_edit", None)
                 st.session_state["t_day_inp"] = ""
                 st.session_state["t_content_inp"] = ""
+                st.rerun()
 
             with cols_t_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
@@ -2371,6 +2402,15 @@ try:
                     st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
                 else:
                     st.button("➕ 添加", key="t_add_btn", use_container_width=False, on_click=handle_train_add)
+
+            # 🛠️ v11.9.24: 定义统一的修改回调，移出循环以确保响应性
+            def trigger_train_edit(r):
+                st.session_state["train_to_edit"] = r
+                # 注意：这里需要立即同步到 widget 的 key 中
+                st.session_state["t_day_inp"] = r['train_day']
+                st.session_state["t_content_inp"] = r['train_content']
+                st.session_state["scroll_to_train_edit"] = True
+                st.rerun()
 
             # 显示训练细节列表
             train_df = get_dad_training_details()
@@ -2383,10 +2423,6 @@ try:
                     with t_row_cols[1]:
                         st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
                     with t_row_cols[2]:
-                        def trigger_train_edit(r):
-                            st.session_state["train_to_edit"] = r
-                            st.session_state["t_day_inp"] = r['train_day']
-                            st.session_state["t_content_inp"] = r['train_content']
                         st.button("✏️", key=f"edit_ftrain_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
                     with t_row_cols[3]:
                         if st.button("🗑️", key=f"del_ftrain_{row['id']}"):
