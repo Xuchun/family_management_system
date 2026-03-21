@@ -2032,14 +2032,10 @@ try:
                         st.session_state["g_val_inp"] = ""
                         st.session_state["_fitness_msg"] = ("success", "已更新！")
                         trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
-                else:
-                    st.session_state["_fitness_msg"] = ("warning", "请填完信息")
-
             def handle_cancel():
                 st.session_state.pop("goal_to_edit", None)
                 st.session_state["g_name_inp"] = ""
                 st.session_state["g_val_inp"] = ""
-                st.rerun()
 
             if goal_to_edit:
                 cols_g[2].button("💾 更新", use_container_width=False, 
@@ -2103,7 +2099,6 @@ try:
                     st.session_state["goal_to_edit"] = r
                     st.session_state["g_name_inp"] = r['goal_name']
                     st.session_state["g_val_inp"] = r['goal_value']
-                    st.rerun()
 
                 for _, row in goals_df.iterrows():
                     # 标记这个 block 属于健身行
@@ -2194,7 +2189,6 @@ try:
                 st.session_state.pop("diet_to_edit", None)
                 st.session_state["d_name_inp"] = ""
                 st.session_state["d_content_inp"] = ""
-                st.rerun()
 
             with cols_d_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True) # 🛠️ v10.3 占位符，使按钮与输入框对齐
@@ -2225,7 +2219,6 @@ try:
                     st.session_state["diet_to_edit"] = r
                     st.session_state["d_name_inp"] = r['meal_name']
                     st.session_state["d_content_inp"] = r['meal_content']
-                    st.rerun()
 
                 for _, row in diet_df.iterrows():
                     st.markdown("<div class='diet-row-marker'></div>", unsafe_allow_html=True)
@@ -2376,7 +2369,6 @@ try:
                         st.session_state["t_day_inp"] = ""
                         st.session_state["t_content_inp"] = ""
                         trigger_realtime_backup()
-                        st.rerun()
 
             def handle_train_update(tid):
                 d = st.session_state.get("t_day_inp", "").strip()
@@ -2387,13 +2379,11 @@ try:
                         st.session_state["t_day_inp"] = ""
                         st.session_state["t_content_inp"] = ""
                         trigger_realtime_backup()
-                        st.rerun()
 
             def handle_train_cancel():
                 st.session_state.pop("train_to_edit", None)
                 st.session_state["t_day_inp"] = ""
                 st.session_state["t_content_inp"] = ""
-                st.rerun()
 
             with cols_t_inp[2]:
                 st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
@@ -2410,7 +2400,6 @@ try:
                 st.session_state["t_day_inp"] = r['train_day']
                 st.session_state["t_content_inp"] = r['train_content']
                 st.session_state["scroll_to_train_edit"] = True
-                st.rerun()
 
             # 显示训练细节列表
             train_df = get_dad_training_details()
