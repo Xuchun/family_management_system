@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.28"
+VERSION = "11.10.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1227,10 +1227,13 @@ def run_auto_backup_logic(silent=True):
         current_hour = now.hour
         
         target_slot = None
-        if current_hour == 1:
-            target_slot = "01am"
-        elif current_hour == 12:
+        target_slot = None
+        if current_hour == 12:
             target_slot = "12pm"
+        elif current_hour == 18:
+            target_slot = "06pm"
+        elif current_hour == 23 and now.minute >= 50:
+            target_slot = "11pm"
         
         if target_slot:
             slot_key = f"last_auto_backup_{target_slot}"
@@ -1249,9 +1252,9 @@ def run_auto_backup_logic(silent=True):
                     # 🛠️ v11.9.16: 补全自动备份标识尾注，确保内容与手动备份 100% 一致
                     content += f"\n\n[🤖 自动每日备份] 备份时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M:%S')}"
                     
-                    # 🛠️ v11.9.16: 去除时间戳中的冒号，防止下载到本地时的文件名乱码/不兼容
+                    # 🛠️ v11.10.1: 精准时间命名格式
                     time_str = now.strftime("%Y-%m-%d-%H%M")
-                    report_name = f"auto_daily_backup_{time_str}.txt"
+                    report_name = f"auto_backup_{time_str}.txt"
                     backup_to_gdrive(content, report_name, overwrite=False, is_binary=False)
                     
                     # 2. 备份二进制数据库 (带日期时间的独立名称)
@@ -1259,7 +1262,7 @@ def run_auto_backup_logic(silent=True):
                         with open(DB_FILE, "rb") as f:
                             db_bytes = f.read()
                             db_b64 = base64.b64encode(db_bytes).decode('utf-8')
-                        db_name = f"auto_daily_db_backup_{time_str}.db"
+                        db_name = f"tasks_auto_backup_{time_str}.db"
                         backup_to_gdrive(db_b64, db_name, overwrite=False, is_binary=True)
                     
                     # 更新最后同步日期
@@ -1278,8 +1281,14 @@ def autonomous_backup_daemon():
     while True:
         try:
             now = get_now_sgt()
-            # 只有在整点的第一分钟内尝试触发
-            if (now.hour == 1 or now.hour == 12) and now.minute == 0:
+            # 12:00, 18:00, 23:50 改为准点触发检查
+            is_trigger_time = False
+            if (now.hour == 12 or now.hour == 18) and now.minute == 0:
+                is_trigger_time = True
+            elif now.hour == 23 and now.minute == 50:
+                is_trigger_time = True
+                
+            if is_trigger_time:
                 run_auto_backup_logic(silent=True)
                 time.sleep(61) # 跨过这一分钟，避免重复触发
             else:
@@ -1445,7 +1454,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.28</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.1</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1483,7 +1492,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.28</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.1</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1837,7 +1846,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.28</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.1</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["01am", "12pm"]:
             msg_key = f"auto_backup_msg_{slot}"
