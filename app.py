@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.26"
+VERSION = "11.9.27"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -198,7 +198,8 @@ def auto_restore_if_needed(force=False):
                     f.write(db_bytes)
                 return True, "✅ 同步成功，数据已还原。"
             except Exception as e:
-                return False, f"❌ 解码/写入失败: {e}"
+                preview = db_b64[:50] + "..." if db_b64 else "None"
+                return False, f"❌ 解码/写入失败: {e} (数据预览: {preview})"
         return False, f"❌ 云端拉取失败: {status}"
     return False, f"Skipped (Local data exists, size: {db_size} bytes)"
 
@@ -1441,7 +1442,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.26</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.27</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1479,7 +1480,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.26</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.27</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1833,7 +1834,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.26</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.27</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["01am", "12pm"]:
             msg_key = f"auto_backup_msg_{slot}"
