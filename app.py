@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.9.24"
+VERSION = "11.9.25"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -126,6 +126,7 @@ def backup_to_gdrive(content_str, filename, overwrite=False, is_binary=False):
     
     try:
         payload = {
+            "action": "upload",
             "filename": filename,
             "content": content_str,
             "overwrite": overwrite,
@@ -144,7 +145,53 @@ def backup_to_gdrive(content_str, filename, overwrite=False, is_binary=False):
         else:
             return False, f"❌ 备份失败: HTTP {response.status_code}"
     except Exception as e:
-        return False, f"❌ 网络请求错误: {str(e)}"
+        return False, f"❌ 通讯异常: {e}"
+
+def pull_from_gdrive(filename, is_binary=False):
+    """
+    🛠️ v11.9.25 核心优化：从 Google Drive 拉取文件数据
+    """
+    url = g_script_url.strip("'\" ") if g_script_url else None
+    if not url:
+        return None, "⚠️ 未配置备份 URL"
+    
+    try:
+        payload = {
+            "action": "download",
+            "filename": filename,
+            "is_binary": is_binary
+        }
+        # 使用 POST 触发 Apps Script 的 doPost
+        response = requests.post(url, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            # 检查是否返回了错误信息
+            if response.text.startswith("Error"):
+                return None, response.text
+            return response.text, "Success"
+        return None, f"HTTP {response.status_code}"
+    except Exception as e:
+        return None, str(e)
+
+def auto_restore_if_needed():
+    """
+    🛠️ v11.9.25 启动自愈：如果本地数据库为空，尝试从云端恢复
+    """
+    if not os.path.exists(DB_FILE) or os.path.getsize(DB_FILE) < 100:
+        # 本地数据库不存在或极小（通常是刚初始化的空表）
+        # 尝试静默拉取
+        db_b64, status = pull_from_gdrive("tasks.db", is_binary=True)
+        if status == "Success" and db_b64:
+            try:
+                db_bytes = base64.b64decode(db_b64)
+                if not os.path.exists("data"): os.makedirs("data")
+                with open(DB_FILE, "wb") as f:
+                    f.write(db_bytes)
+                print("✅ [Auto-Restore] 启动成功，已自动从云端同步数据。")
+                return True
+            except:
+                pass
+    return False
 
 def trigger_realtime_backup():
     """
@@ -1318,6 +1365,10 @@ st.markdown("""
 
 # --- 6. Main App Structure ---
 try:
+    # 🛠️ v11.9.25: 启动自愈逻辑 - 如果本地库为空，自动从云端接拉回最新版本
+    # 这解决了由于 Streamlit Cloud 容器重启导致的本地 SQLite 数据丢失问题
+    auto_restore_if_needed()
+    
     init_db()
     # 执行自动备份逻辑 (Lazy Load + Daemon 状态同步)
     run_auto_backup_logic(silent=False)
@@ -1381,7 +1432,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.24</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.9.25</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1419,7 +1470,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.24</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.25</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1773,7 +1824,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.24</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.9.25</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["01am", "12pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1839,6 +1890,21 @@ try:
             2. **找到文件**: 找到文件名为 `tasks.db` 的最新文件并下载。
             3. **在此上传**: 使用下方控件上传。
             """)
+            
+            # --- 🛠️ v11.9.25: 新增一键同步云端按钮 ---
+            st.info("💡 **推荐方式**：点击下方按钮直接从 Google Drive 拉取最新备份，无需手动下载上传。")
+            if st.button("🔄 从云端自动同步最新备份", key="btn_auto_cloud_pull", type="primary"):
+                with st.spinner("正在连接云端..."):
+                    success = auto_restore_if_needed()
+                    if success:
+                        st.success("✅ 恢复成功！系统将自动重载数据。")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ 自动同步失败。可能是云端暂无 `tasks.db` 备份或脚本未更新。请尝试手动上传。")
+            
+            st.markdown("---")
+            st.markdown("<b>或者手动上传 tasks.db 文件：</b>", unsafe_allow_html=True)
             uploaded_db = st.file_uploader("选择 tasks.db 文件", type=["db"], key="db_uploader_v85")
             if uploaded_db:
                 st.warning("⚠️ 确认后将覆盖所有当前数据。")
