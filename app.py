@@ -187,11 +187,11 @@ def auto_restore_if_needed():
                 if not os.path.exists("data"): os.makedirs("data")
                 with open(DB_FILE, "wb") as f:
                     f.write(db_bytes)
-                print("✅ [Auto-Restore] 启动成功，已自动从云端同步数据。")
-                return True
-            except:
-                pass
-    return False
+                return True, "✅ 自动恢复成功"
+            except Exception as e:
+                return False, f"❌ 解码/写入失败: {e}"
+        return False, f"❌ 云端拉取失败: {status}"
+    return False, "Skipped (Local data exists)"
 
 def trigger_realtime_backup():
     """
@@ -1895,13 +1895,14 @@ try:
             st.info("💡 **推荐方式**：点击下方按钮直接从 Google Drive 拉取最新备份，无需手动下载上传。")
             if st.button("🔄 从云端自动同步最新备份", key="btn_auto_cloud_pull", type="primary"):
                 with st.spinner("正在连接云端..."):
-                    success = auto_restore_if_needed()
+                    success, detail = auto_restore_if_needed()
                     if success:
-                        st.success("✅ 恢复成功！系统将自动重载数据。")
+                        st.success(detail)
                         time.sleep(1.5)
                         st.rerun()
                     else:
-                        st.error("❌ 自动同步失败。可能是云端暂无 `tasks.db` 备份或脚本未更新。请尝试手动上传。")
+                        st.error(f"❌ 自动同步失败: {detail}")
+                        st.info("💡 请确保您已更新 Google Apps Script 代码，且云端文件夹中存在 `tasks.db` 文件。")
             
             st.markdown("---")
             st.markdown("<b>或者手动上传 tasks.db 文件：</b>", unsafe_allow_html=True)
