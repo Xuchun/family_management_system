@@ -173,13 +173,16 @@ def pull_from_gdrive(filename, is_binary=False):
     except Exception as e:
         return None, str(e)
 
-def auto_restore_if_needed():
+def auto_restore_if_needed(force=False):
     """
     🛠️ v11.9.25 启动自愈：如果本地数据库为空，尝试从云端恢复
     """
-    if not os.path.exists(DB_FILE) or os.path.getsize(DB_FILE) < 100:
-        # 本地数据库不存在或极小（通常是刚初始化的空表）
-        # 尝试静默拉取
+    db_exists = os.path.exists(DB_FILE)
+    db_size = os.path.getsize(DB_FILE) if db_exists else 0
+    
+    # 逻辑：如果强制执行，或者数据库不存在，或者数据库极小 (可能是空库)
+    if force or not db_exists or db_size < 100:
+        # 尝试从云端拉取
         db_b64, status = pull_from_gdrive("tasks.db", is_binary=True)
         if status == "Success" and db_b64:
             try:
@@ -187,11 +190,11 @@ def auto_restore_if_needed():
                 if not os.path.exists("data"): os.makedirs("data")
                 with open(DB_FILE, "wb") as f:
                     f.write(db_bytes)
-                return True, "✅ 自动恢复成功"
+                return True, "✅ 同步成功，数据已还原。"
             except Exception as e:
                 return False, f"❌ 解码/写入失败: {e}"
         return False, f"❌ 云端拉取失败: {status}"
-    return False, "Skipped (Local data exists)"
+    return False, f"Skipped (Local data exists, size: {db_size} bytes)"
 
 def trigger_realtime_backup():
     """
@@ -1895,7 +1898,7 @@ try:
             st.info("💡 **推荐方式**：点击下方按钮直接从 Google Drive 拉取最新备份，无需手动下载上传。")
             if st.button("🔄 从云端自动同步最新备份", key="btn_auto_cloud_pull", type="primary"):
                 with st.spinner("正在连接云端..."):
-                    success, detail = auto_restore_if_needed()
+                    success, detail = auto_restore_if_needed(force=True)
                     if success:
                         st.success(detail)
                         time.sleep(1.5)
