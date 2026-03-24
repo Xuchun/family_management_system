@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.10.5"
+VERSION = "11.10.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1476,7 +1476,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.5</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.6</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1514,7 +1514,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.5</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.6</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1868,7 +1868,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.5</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.6</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1905,6 +1905,22 @@ try:
                         else: st.error("保存失败")
                     else: st.warning("请输入6位数字")
 
+            # --- 🛠️ v11.10.6: 正确放置：在弹窗主菜单内显示自动备份巡检日志 ---
+            st.markdown("---")
+            st.markdown("#### 📊 自动备份巡检日志")
+            try:
+                with sqlite3.connect(DB_FILE) as conn:
+                    log_df = pd.read_sql("SELECT timestamp, slot, status, message FROM backup_logs ORDER BY id DESC LIMIT 5", conn)
+                    if not log_df.empty:
+                        for _, row in log_df.iterrows():
+                            color = "#059669" if row['status'] == "SUCCESS" else "#e11d48"
+                            st.markdown(f"<div style='font-size: 0.85rem; color: #64748b;'>🕒 {row['timestamp']} [{row['slot']}] <b style='color: {color};'>{row['status']}</b></div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;'>└ {row['message']}</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("尚无备份巡检记录。")
+            except:
+                st.info("等待首次自动备份触发...")
+
             st.markdown("---")
             # 4. 退出登录
             st.button("🔴 退出登录", use_container_width=False, on_click=handle_logout, key="menu_logout_btn")
@@ -1916,7 +1932,7 @@ try:
         # --- 恢复中心 专用视图 ---
         tc1, tc2 = st.columns([0.7, 0.3])
         with tc1:
-            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.5</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.6</span></h2>", unsafe_allow_html=True)
         with tc2:
             if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
