@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.10.4"
+VERSION = "11.10.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1242,38 +1242,60 @@ def run_auto_backup_logic(silent=True):
             with sqlite3.connect(DB_FILE) as conn:
                 c = conn.cursor()
                 c.execute("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, val TEXT)")
+                c.execute("CREATE TABLE IF NOT EXISTS backup_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, slot TEXT, status TEXT, message TEXT)")
+                
                 c.execute("SELECT val FROM system_config WHERE key = ?", (slot_key,))
                 res = c.fetchone()
                 last_date = res[0] if res else ""
                 
                 if last_date != current_date:
-                    # 1. 备份文本报告 (带日期时间的独立名称)
-                    content = generate_master_report()
-                    # 🛠️ v11.9.16: 补全自动备份标识尾注，确保内容与手动备份 100% 一致
-                    content += f"\n\n[🤖 自动每日备份] 备份时间: {get_now_sgt().strftime('%Y-%m-%d %H:%M:%S')}"
-                    
-                    # 🛠️ v11.10.1: 精准时间命名格式
-                    time_str = now.strftime("%Y-%m-%d-%H%M")
-                    report_name = f"auto_backup_{time_str}.txt"
-                    backup_to_gdrive(content, report_name, overwrite=False, is_binary=False)
-                    
-                    # 2. 备份二进制数据库 (带日期时间的独立名称)
-                    if os.path.exists(DB_FILE):
-                        with open(DB_FILE, "rb") as f:
-                            db_bytes = f.read()
-                            db_b64 = base64.b64encode(db_bytes).decode('utf-8')
-                        db_name = f"tasks_auto_backup_{time_str}.db"
-                        backup_to_gdrive(db_b64, db_name, overwrite=False, is_binary=True)
-                    
-                    # 更新最后同步日期
-                    c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
-                    conn.commit()
-                    
-                    if not silent:
-                        st.session_state[f"auto_backup_msg_{target_slot}"] = f"✅ 已完成每日 {target_slot} 固定快照同步。"
+                    try:
+                        # 1. 备份文本报告
+                        content = generate_master_report()
+                        content += f"\n\n[🤖 自动每日备份] 备份时间: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+                        time_str = now.strftime("%Y-%m-%d-%H%M")
+                        report_name = f"auto_backup_{time_str}.txt"
+                        s1, m1 = backup_to_gdrive(content, report_name, overwrite=False, is_binary=False)
+                        
+                        # 2. 备份二进制数据库
+                        s2, m2 = False, "Skipped"
+                        if os.path.exists(DB_FILE):
+                            with open(DB_FILE, "rb") as f:
+                                db_bytes = f.read()
+                                db_b64 = base64.b64encode(db_bytes).decode('utf-8')
+                            db_name = f"tasks_auto_backup_{time_str}.db"
+                            s2, m2 = backup_to_gdrive(db_b64, db_name, overwrite=False, is_binary=True)
+                        
+                        status = "SUCCESS" if s1 and s2 else "PARTIAL_FAILURE"
+                        msg = f"Report: {m1} | DB: {m2}"
+                        
+                        # 重大修复 (v11.10.5): 只有在至少成功一个的情况下才标记该时段已备份
+                        if s1 or s2:
+                            c.execute("INSERT OR REPLACE INTO system_config (key, val) VALUES (?, ?)", (slot_key, current_date))
+                        
+                        c.execute("INSERT INTO backup_logs (timestamp, slot, status, message) VALUES (?, ?, ?, ?)",
+                                 (now.strftime("%Y-%m-%d %H:%M:%S"), target_slot, status, msg))
+                        conn.commit()
+                        
+                        if not silent:
+                            st.session_state[f"auto_backup_msg_{target_slot}"] = f"✅ 已完成每日 {target_slot} 固定快照同步。"
+                            
+                    except Exception as inner_e:
+                        c.execute("INSERT INTO backup_logs (timestamp, slot, status, message) VALUES (?, ?, ?, ?)",
+                                 (now.strftime("%Y-%m-%d %H:%M:%S"), target_slot, "ERROR", str(inner_e)))
+                        conn.commit()
+                        raise inner_e
     except Exception as e:
-        if not silent:
-            print(f"自动备份后台错误: {e}")
+        # 为了避免干扰用户，静默记录到数据库即可
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                c = conn.cursor()
+                c.execute("CREATE TABLE IF NOT EXISTS backup_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, slot TEXT, status TEXT, message TEXT)")
+                c.execute("INSERT INTO backup_logs (timestamp, slot, status, message) VALUES (?, ?, ?, ?)",
+                         (get_now_sgt().strftime("%Y-%m-%d %H:%M:%S"), "CRITICAL", "ERROR", f"Daemon Context Error: {str(e)}"))
+                conn.commit()
+        except: pass
+        if not silent: print(f"自动备份后台错误: {e}")
 
 def autonomous_backup_daemon():
     """后台永驻守护线程：每 30 秒巡检一次时间，准点触发每日快照"""
@@ -1454,7 +1476,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.4</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.5</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1492,7 +1514,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.4</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.5</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1846,7 +1868,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.4</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.5</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1894,7 +1916,7 @@ try:
         # --- 恢复中心 专用视图 ---
         tc1, tc2 = st.columns([0.7, 0.3])
         with tc1:
-            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.4</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.5</span></h2>", unsafe_allow_html=True)
         with tc2:
             if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
@@ -1960,6 +1982,21 @@ try:
                     except Exception as e:
                         st.error(f"解析失败: {e}")
         
+        st.markdown("---")
+        st.markdown("### 📊 自动备份巡检日志")
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                log_df = pd.read_sql("SELECT timestamp, slot, status, message FROM backup_logs ORDER BY id DESC LIMIT 5", conn)
+                if not log_df.empty:
+                    for _, row in log_df.iterrows():
+                        color = "#059669" if row['status'] == "SUCCESS" else "#e11d48"
+                        st.markdown(f"<div style='font-size: 0.85rem; color: #64748b;'>🕒 {row['timestamp']} [{row['slot']}] <b style='color: {color};'>{row['status']}</b></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;'>└ {row['message']}</div>", unsafe_allow_html=True)
+                else:
+                    st.info("尚无备份巡检记录。")
+        except:
+            st.info("等待首次自动备份触发...")
+
         st.markdown("---")
         st.markdown("### 🛡️ 系统状态监控")
         st.write(f"**当前版本**: v{VERSION} | **数据库**: `{os.path.basename(DB_FILE)}`")
