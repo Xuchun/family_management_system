@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.11.1"
+VERSION = "11.11.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -993,33 +993,39 @@ def hits_day(pattern, target_date):
     """判断特定日期是否命中循环规则 (v11.10.7: 提至全局作用域)"""
     if not pattern: return False
     p = pattern.strip()
-    if p == 'Everyday': return True
-    if p == 'Weekend' and target_date.weekday() >= 5: return True
-    if p == 'Monthly-LastDay':
+    if p.lower() == 'everyday': return True
+    if p.lower() == 'weekend' and target_date.weekday() >= 5: return True
+    if p.lower() == 'monthly-lastday':
         return (target_date + timedelta(days=1)).day == 1
-    # v11.10.8: 增强鲁棒性，兼容 AI 偶尔产生的简写或非标准格式
-    if p in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
-        wd_map = {'Monday':0,'Tuesday':1,'Wednesday':2,'Thursday':3,'Friday':4,'Saturday':5,'Sunday':6}
-        return target_date.weekday() == wd_map[p]
-    if p == 'Monthly': # 默认每月 1 号
+        
+    # v11.11.2: 全面大小写不敏感支持，并处理各种简写
+    p_lower = p.lower()
+    days_full = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    if p_lower in days_full:
+        wd_map = {d: i for i, d in enumerate(days_full)}
+        return target_date.weekday() == wd_map[p_lower]
+    
+    if p_lower == 'monthly': # 默认每月 1 号
         return target_date.day == 1
         
-    if p.startswith('Weekly-'):
-        target_wd = p.split('-')[1]
-        wd_map = {'Mon':0,'Tue':1,'Wed':2,'Thu':3,'Fri':4,'Sat':5,'Sun':6,
-                  'Monday':0,'Tuesday':1,'Wednesday':2,'Thursday':3,'Friday':4,'Saturday':5,'Sunday':6}
+    if p_lower.startswith('weekly-'):
+        target_wd = p_lower.split('-')[1]
+        wd_map = {'mon':0,'tue':1,'wed':2,'thu':3,'fri':4,'sat':5,'sun':6,
+                  'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6}
         return target_date.weekday() == wd_map.get(target_wd, -1)
-    if p.startswith('Monthly-'):
+    if p_lower.startswith('monthly-'):
         try:
-            target_dom = int(p.split('-')[1])
+            target_dom = int(p_lower.split('-')[1])
             return target_date.day == target_dom
         except: return False
-    if p.startswith('Yearly-'):
+    if p_lower.startswith('yearly-'):
         try:
             # 格式为 Yearly-MM-DD
-            parts = p.split('-')
+            parts = p_lower.split('-')
             return target_date.month == int(parts[1]) and target_date.day == int(parts[2])
         except: return False
+    # 特殊情况：Yearly (无日期) -> 取 due_date 的日月? 
+    # 但通常 AI 会输出带日期的，这里暂不处理
         
     return False
 
@@ -1518,7 +1524,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.11.1</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.11.2</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1556,7 +1562,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.1</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.2</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1895,7 +1901,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.1</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.2</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1982,7 +1988,7 @@ try:
         # --- 恢复中心 专用视图 ---
         tc1, tc2 = st.columns([0.7, 0.3])
         with tc1:
-            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.11.1</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.11.2</span></h2>", unsafe_allow_html=True)
         with tc2:
             if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
