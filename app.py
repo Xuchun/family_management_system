@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.10.8"
+VERSION = "11.10.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1031,8 +1031,8 @@ def get_categorized_tasks():
     today_date = now.date()
     tomorrow_date = today_date + timedelta(days=1)
     end_of_week = today_date + timedelta(days=6 - today_date.weekday())
-    next_month = today_date.replace(day=28) + timedelta(days=4)
-    end_of_month = next_month - timedelta(days=next_month.day)
+    # v11.10.9: 展望 30 天，确保跨月事项能被准确扫描到
+    lookahead_limit = today_date + timedelta(days=30)
     
     recurring_list, overdue_list, today_list, tomorrow_list, week_list, later_list = [], [], [], [], [], []
     shadow_overdue, shadow_today, shadow_tomorrow, shadow_week, shadow_later = [], [], [], [], []
@@ -1072,10 +1072,9 @@ def get_categorized_tasks():
                 if hits_day(item['recurring_pattern'], curr): shadow_week.append((item, curr))
                 curr += timedelta(days=1)
             curr_later = end_of_week + timedelta(days=1)
-            if curr_later <= end_of_month:
-                while curr_later <= end_of_month:
-                    if hits_day(item['recurring_pattern'], curr_later): shadow_later.append((item, curr_later))
-                    curr_later += timedelta(days=1)
+            while curr_later <= lookahead_limit:
+                if hits_day(item['recurring_pattern'], curr_later): shadow_later.append((item, curr_later))
+                curr_later += timedelta(days=1)
 
     recur_comps = get_recurring_completions()
     def prepare_item_list(normal_items, shadow_items_with_dates=None, shadow_items_plain=None, default_date=None):
@@ -1519,7 +1518,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.8</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.10.9</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1557,7 +1556,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.8</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.9</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1896,7 +1895,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.8</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.10.9</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1960,7 +1959,7 @@ try:
         # --- 恢复中心 专用视图 ---
         tc1, tc2 = st.columns([0.7, 0.3])
         with tc1:
-            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.8</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.10.9</span></h2>", unsafe_allow_html=True)
         with tc2:
             if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
