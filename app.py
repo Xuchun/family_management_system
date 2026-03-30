@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.11.0"
+VERSION = "11.11.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1518,7 +1518,7 @@ try:
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
             with st.container():
-                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.11.0</span></h1>", unsafe_allow_html=True)
+                st.markdown(f"<h1 class='main-header' style='margin-top: 100px; opacity:0.5;'>🏠 家庭管理系统 <span style='font-size: 0.8rem;'>v11.11.1</span></h1>", unsafe_allow_html=True)
                 st.markdown("<div style='text-align:center; color:#9ca3af;'>🛡️ 正在安全恢复您的加密会话...</div>", unsafe_allow_html=True)
                 time.sleep(0.5)
                 st.rerun()
@@ -1556,7 +1556,7 @@ try:
     login_placeholder = st.empty()
     if not st.session_state["authenticated"]:
         with login_placeholder.container():
-            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.0</span></h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 class='main-header' style='margin-top: 50px;'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.1</span></h1>", unsafe_allow_html=True)
             _, col_m, _ = st.columns([1, 2, 1])
             with col_m:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1895,7 +1895,7 @@ try:
     # Header Row - 调整比例并让菜单靠右
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
-        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.0</span></h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v11.11.1</span></h1>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
@@ -1905,6 +1905,29 @@ try:
     with c_menu:
         # v8.6 - 取消 use_container_width 以实现紧凑宽度
         with st.popover("⚙️ 系统功能菜单", use_container_width=False):
+            # --- 🛠️ v11.11.1: 循环任务诊断工具 (移至顶部确保可见) ---
+            with st.expander("🔍 循环任务诊断工具", expanded=False):
+                st.markdown("<div style='font-size:0.8rem; color:#666;'>展示所有循环任务的原始模式及未来30天命中日期</div>", unsafe_allow_html=True)
+                try:
+                    with sqlite3.connect(DB_FILE) as conn:
+                        diag_df = pd.read_sql("SELECT id, task, recurring_pattern FROM tasks WHERE recurring_pattern IS NOT NULL AND recurring_pattern != ''", conn)
+                        if not diag_df.empty:
+                            now_diag = get_now_sgt().date()
+                            for _, r in diag_df.iterrows():
+                                t_name = decrypt_str(r['task'])
+                                hits = []
+                                for i in range(31):
+                                    test_d = now_diag + timedelta(days=i)
+                                    if hits_day(r['recurring_pattern'], test_d):
+                                        hits.append(test_d.strftime("%m-%d"))
+                                st.markdown(f"- **{t_name}**")
+                                st.markdown(f"  `Pattern`: [{r['recurring_pattern']}] | `Hits`: {', '.join(hits) if hits else 'None'}")
+                        else:
+                            st.info("没有找到循环任务")
+                except Exception as ex:
+                    st.error(f"诊断失败: {ex}")
+            st.markdown("---")
+
             # 1. 云端备份 (手动)
             if st.button("☁️ 手动云端数据备份", use_container_width=False, help="同时备份文本报告和数据库"):
                 with st.spinner("备份中..."):
@@ -1959,7 +1982,7 @@ try:
         # --- 恢复中心 专用视图 ---
         tc1, tc2 = st.columns([0.7, 0.3])
         with tc1:
-            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.11.0</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='margin:0; font-size: 1.5rem;'>🛡️ 数据恢复中心 <span style='font-size: 0.8rem; color: #888;'>v11.11.1</span></h2>", unsafe_allow_html=True)
         with tc2:
             if st.button("⬅️ 返回主控制台", use_container_width=False, type="primary"):
                 st.session_state["show_recovery_center"] = False
