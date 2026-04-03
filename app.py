@@ -988,8 +988,9 @@ def import_from_report_text(report_text):
 # --- 辅助 UI 与逻辑函数 ---
 def hits_day(pattern, target_date):
     """判断特定日期是否命中循环规则 (v11.10.7: 提至全局作用域)"""
-    if not pattern: return False
-    p = pattern.strip()
+    # v11.12.1-hotfix: 鲁棒性检查，防止 pattern 为 float/NaN 导致 .strip() 崩溃
+    if not pattern or pd.isna(pattern): return False
+    p = str(pattern).strip()
     p_lower = p.lower()
     if p_lower in ['everyday', 'daily']: return True
     if p.lower() == 'weekend' and target_date.weekday() >= 5: return True
