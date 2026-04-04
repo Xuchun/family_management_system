@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.12.4"
+VERSION = "11.12.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1803,7 +1803,9 @@ try:
                 overdue_cls = "overdue-text" if is_overdue else ""
                 overdue_date_cls = "overdue-date" if is_overdue else ""
                 
-                recur_tag = f"<span class='recur-tag'>🔄 循环: {row['recurring_pattern']}</span>" if row['recurring_pattern'] else ""
+                pat = row['recurring_pattern']
+                # v11.12.5: 修复显示 Bug，确强制排除 NaN 和 "None" 字符串显示为循环标签
+                recur_tag = f"<span class='recur-tag'>🔄 循环: {pat}</span>" if pat and not pd.isna(pat) and str(pat).lower() != 'none' else ""
                 due_val = f"📅 日期/时间: {format_date_with_weekday(row['due_date'])}" if row['due_date'] else ""
                 
                 c2.markdown(f"<p class='todo-text {style} {overdue_cls}'>{row['task']}{recur_tag}</p><div class='todo-date {overdue_date_cls}'>{due_val}</div>", unsafe_allow_html=True)
