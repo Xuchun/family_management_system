@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.12.2"
+VERSION = "11.12.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -1047,7 +1047,9 @@ def get_categorized_tasks():
         completed_tasks = tasks_df[tasks_df['completed'] == 1]
         
         for _, row in open_tasks.iterrows():
-            if row['recurring_pattern']:
+            pat = row['recurring_pattern']
+            # v11.12.3: 修复真值判断 Bug，确保空值 (NaN) 或 "None" 字符串不被误认为循环模式
+            if pat and not pd.isna(pat) and str(pat).lower() != 'none':
                 recurring_list.append(row)
                 continue
             if not row['due_date']:
