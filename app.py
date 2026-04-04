@@ -700,10 +700,8 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         
         返回格式 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/Everyday/Weekend/Weekly-Sun/Monthly-1/Monthly-LastDay/Yearly-MM-DD", "cleaned_task": "..." }}
         
-        【重要：重复模式 recur 的规范】
-        - 仅当明确提到“每天”、“每周”、“每个”、“每月”或“每年”时，才使用重复模式。
-        - 如果只是说“这周五”、“下周六”、“本周日”，则视为一次性任务，recur 返回 "None"。
         - 格式：None/Everyday/Weekend/Weekly-Sun/Monthly-1/Monthly-LastDay/Yearly-MM-DD
+        - 【核心禁令】：严禁将描述性词汇（如“偶尔”、“总是”、“经常”、“有时候”）误判为重复模式。只有当明确指定了具体的频率（如“每周五”、“每月1号”）时才返回 recur。
         """
         response = client.chat.completions.create(
             model="gpt-4o",
