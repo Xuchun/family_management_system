@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.12.3"
+VERSION = "11.12.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -700,8 +700,12 @@ def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
         
         返回格式 JSON: {{ "date": "YYYY-MM-DD HH:MM", "recur": "None/Everyday/Weekend/Weekly-Sun/Monthly-1/Monthly-LastDay/Yearly-MM-DD", "cleaned_task": "..." }}
         
-        - 格式：None/Everyday/Weekend/Weekly-Sun/Monthly-1/Monthly-LastDay/Yearly-MM-DD
-        - 【核心禁令】：严禁将描述性词汇（如“偶尔”、“总是”、“经常”、“有时候”）误判为重复模式。只有当明确指定了具体的频率（如“每周五”、“每月1号”）时才返回 recur。
+        【重要：重复模式 recur 判定规则】
+        - 只有涉及周期性频率（如“每”、“每天”、“每周五”）时才返回 recur。
+        - 【强制禁令】：单次日期（如“9月1日”、“10月10号”）如果没有“每年”二字，一律视为一次性任务，recur 必须返回 "None"。
+        - 【强制禁令】：描述词（如“偶尔”、“总是”、“不是总是”、“央求”）严禁误判为重复。
+        - 示例："9月1日申请换课" -> recur: "None", date: "2026-09-01 12:00"
+        - 示例："每年9月1日交学费" -> recur: "Yearly-09-01", date: "2026-09-01 12:00"
         """
         response = client.chat.completions.create(
             model="gpt-4o",
