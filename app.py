@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.12.5"
+VERSION = "11.12.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -807,6 +807,29 @@ def update_task_status(task_id, completed):
     conn.commit()
     conn.close()
     trigger_realtime_backup()
+
+def delay_task_24h(task_id):
+    """将特定任务的截止时间延后 24 小时 (v11.12.5 新增)"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT due_date FROM tasks WHERE id = ?", (task_id,))
+        row = c.fetchone()
+        if row and row[0]:
+            try:
+                curr_dt = datetime.strptime(row[0], "%Y-%m-%d %H:%M")
+                new_dt = curr_dt + timedelta(hours=24)
+                new_dt_str = new_dt.strftime("%Y-%m-%d %H:%M")
+                c.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (new_dt_str, task_id))
+                conn.commit()
+            except Exception as e:
+                print(f"Error parsing date or updating: {e}")
+        conn.close()
+        trigger_realtime_backup()
+        return True
+    except Exception as e:
+        print(f"Database error in delay_task: {e}")
+        return False
 
 def delete_task(task_id):
     conn = sqlite3.connect(DB_FILE)
@@ -1737,6 +1760,37 @@ try:
     if "last_task_result" in st.session_state:
         show_task_result_dialog(st.session_state.pop("last_task_result"))
 
+    @st.dialog("📋 事项处理结果")
+    def confirm_delay_dialog(task_obj):
+        """延期 24 小时确认对话框 (与用户截图风格一致)"""
+        st.markdown("<br>", unsafe_allow_html=True)
+        # 绿色勾选提示框
+        st.success("📝 该事项准备延期 24 小时运行！")
+        
+        st.markdown(f"**内容：** {task_obj['task']}")
+        
+        # 计算新时间
+        try:
+            old_dt = datetime.strptime(task_obj['due_date'], "%Y-%m-%d %H:%M")
+            new_dt = old_dt + timedelta(hours=24)
+            new_dt_str = new_dt.strftime("%Y-%m-%d %H:%M")
+            weekday_str = format_date_with_weekday(new_dt_str).split(' ')[-1]
+            display_new_date = f"{new_dt_str} {weekday_str}"
+        except:
+            display_new_date = "日期格式错误"
+            
+        st.markdown(f"**⏰ 日期/时间：** {display_new_date}")
+        st.markdown("---")
+        
+        c_left, c_right = st.columns([1, 1])
+        with c_left:
+            if st.button("确认", type="primary", use_container_width=True, key="confirm_delay_btn"):
+                if delay_task_24h(task_obj['id']):
+                    st.rerun()
+        with c_right:
+            if st.button("取消", use_container_width=True, key="cancel_delay_btn"):
+                st.rerun()
+
     def render_task(row, is_shadow=False, location="main", is_overdue=False):
         key_id = f"{location}_c_{row['id']}" if not is_shadow else f"sh_{location}_{row['id']}_{row['due_date'][:10]}"
         if not is_shadow:
@@ -1751,7 +1805,7 @@ try:
         with st.container():
             st.markdown('<div class="task-container">', unsafe_allow_html=True)
             # Layout: checkbox, content area (text or input), action buttons
-            c1, c2, c3 = st.columns([0.05, 0.75, 0.2])
+            c1, c2, c3 = st.columns([0.05, 0.70, 0.25])
             
             if not is_shadow:
                 is_comp = c1.checkbox("", value=row['completed'], key=key_id)
@@ -1811,8 +1865,10 @@ try:
                 c2.markdown(f"<p class='todo-text {style} {overdue_cls}'>{row['task']}{recur_tag}</p><div class='todo-date {overdue_date_cls}'>{due_val}</div>", unsafe_allow_html=True)
                 
                 # Action buttons
-                edit_col, del_col = c3.columns(2)
                 if not is_shadow:
+                    delay_col, edit_col, del_col = c3.columns(3)
+                    if delay_col.button("⏰", key=f"delay_{location}_{row['id']}", help="延期 24 小时"):
+                        confirm_delay_dialog(row)
                     if edit_col.button("✏️", key=edit_id, help="修改"):
                         st.session_state["editing_task_id"] = row['id']
                         st.rerun()
@@ -1820,6 +1876,7 @@ try:
                         delete_task(row['id'])
                         st.rerun()
                 else:
+                    edit_col, del_col = c3.columns(2)
                     # Shadow tasks in archive can be "Deleted" (removed from completions)
                     if row.get('completed'):
                         if del_col.button("🗑️", key=del_id, help="撤销完成记录"):
