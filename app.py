@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.13"
+VERSION = "11.13.14"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2962,8 +2962,10 @@ try:
                             x='shared'
                         ).interactive()
                         
-                        st.altair_chart(chart, use_container_width=True)
-                        st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
+                        col_chart, _ = st.columns([4, 1])
+                        with col_chart:
+                            st.altair_chart(chart, use_container_width=True)
+                            st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
                     else:
                         st.info(f"尚无【{selected_ex}】的历史记录。")
                 else:
