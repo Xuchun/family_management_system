@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.25"
+VERSION = "11.13.26"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2930,6 +2930,7 @@ try:
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 idx += 1
                 
+            st.markdown("<div style='text-align: right; margin-bottom: 10px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
             
             for ex in lower_exercises:
