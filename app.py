@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.1"
+VERSION = "11.13.2"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2791,6 +2791,11 @@ try:
             
             latest_fitness = get_latest_fitness_records()
             
+            def clear_fitness_row(k_w, k_r, k_s):
+                st.session_state[k_w] = 0.0
+                st.session_state[k_r] = 0
+                st.session_state[k_s] = 0
+
             def render_fitness_row(category, exercise, idx):
                 col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
                 
@@ -2819,11 +2824,7 @@ try:
                             st.toast(f"✅ 【{exercise}】已保存！")
                             trigger_realtime_backup()
                 with col_clear:
-                    if st.button("清除", key=f"f_clear_{idx}", use_container_width=True):
-                        st.session_state[k_w] = 0.0
-                        st.session_state[k_r] = 0
-                        st.session_state[k_s] = 0
-                        st.rerun()
+                    st.button("清除", key=f"f_clear_{idx}", use_container_width=True, on_click=clear_fitness_row, args=(k_w, k_r, k_s))
             
             upper_exercises = [
                 "哑铃侧平举",
