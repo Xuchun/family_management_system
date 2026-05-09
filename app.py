@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.19"
+VERSION = "11.13.20"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2902,14 +2902,14 @@ try:
             
             idx = 0
             for ex in upper_exercises:
-                render_fitness_row("上肢重训", ex, idx)
+                render_fitness_row("上肢重训日", ex, idx)
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 idx += 1
                 
             st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
             
             for ex in lower_exercises:
-                render_fitness_row("下肢重训", ex, idx)
+                render_fitness_row("下肢重训日", ex, idx)
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 idx += 1
                 
@@ -2995,7 +2995,7 @@ try:
                         
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
                         
-                        cat_str = "上肢重训" if selected_ex in upper_exercises else "下肢重训"
+                        cat_str = "上肢重训日" if selected_ex in upper_exercises else "下肢重训日"
                         hist_msg_ph = st.empty()
                         
                         for _, row in ex_df.sort_values(by='record_date', ascending=False).iterrows():
