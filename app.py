@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.7"
+VERSION = "11.13.8"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2916,17 +2916,25 @@ try:
                             x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45))
                         )
                         
-                        line_weight = base.mark_line(point=True, color='#3b82f6').encode(
+                        base_weight = base.encode(
                             y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(zero=False)),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
+                        line_weight = base_weight.mark_line(color='#3b82f6')
+                        point_weight = base_weight.mark_circle(color='#3b82f6').encode(
+                            size=alt.Size('sets:Q', title='组数', scale=alt.Scale(range=[50, 300]), legend=None)
+                        )
                         
-                        line_reps = base.mark_line(point=True, color='#ef4444').encode(
+                        base_reps = base.encode(
                             y=alt.Y('reps:Q', title='次数', scale=alt.Scale(zero=False)),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
+                        line_reps = base_reps.mark_line(color='#ef4444')
+                        point_reps = base_reps.mark_circle(color='#ef4444').encode(
+                            size=alt.Size('sets:Q', title='组数', scale=alt.Scale(range=[50, 300]), legend=None)
+                        )
                         
-                        chart = alt.layer(line_weight, line_reps).resolve_scale(
+                        chart = alt.layer(line_weight, point_weight, line_reps, point_reps).resolve_scale(
                             y='independent'
                         ).properties(
                             height=350
