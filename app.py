@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.2"
+VERSION = "11.13.3"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2789,6 +2789,7 @@ try:
             
             st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
             
+            fitness_msg_ph = st.empty()
             latest_fitness = get_latest_fitness_records()
             
             def clear_fitness_row(k_w, k_r, k_s):
@@ -2820,9 +2821,12 @@ try:
                     s_val = st.number_input("s", min_value=0, value=int(default_s), step=1, key=k_s, label_visibility="collapsed")
                 with col_save:
                     if st.button("保存", key=f"f_save_{idx}", use_container_width=True):
-                        if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
-                            st.toast(f"✅ 【{exercise}】已保存！")
-                            trigger_realtime_backup()
+                        if w_val <= 0 or r_val <= 0 or s_val <= 0:
+                            fitness_msg_ph.error(f"⚠️ 【{exercise}】保存失败：重量(kg)、次数、组数均必须大于0！")
+                        else:
+                            if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                                st.toast(f"✅ 【{exercise}】已保存！")
+                                trigger_realtime_backup()
                 with col_clear:
                     st.button("清除", key=f"f_clear_{idx}", use_container_width=True, on_click=clear_fitness_row, args=(k_w, k_r, k_s))
             
