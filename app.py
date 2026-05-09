@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.21"
+VERSION = "11.13.22"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2360,6 +2360,21 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         elif selected_tab == '🏋️‍♂️ 爸爸的健身':
+            st.markdown("""
+            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 25px;">
+            <b style="font-size: 1.1em; color: #31333F;">📋 目录</b>
+            <ul style="margin-top: 10px; margin-bottom: 0;">
+                <li><a href="#anchor-fitness-goals" target="_self" style="text-decoration: none; color: #0366d6;">🎯 健身目标（同龄人5-10%）</a></li>
+                <li><a href="#anchor-diet-plan" target="_self" style="text-decoration: none; color: #0366d6;">🍽️ 饮食方案</a></li>
+                <li><a href="#anchor-weight-record" target="_self" style="text-decoration: none; color: #0366d6;">⚖️ 体重记录</a></li>
+                <li><a href="#anchor-weekly-plan" target="_self" style="text-decoration: none; color: #0366d6;">🏋️ 每周运动计划</a></li>
+                <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录</a></li>
+                <li><a href="#anchor-history-performance" target="_self" style="text-decoration: none; color: #0366d6;">📈 重训项目历史表现</a></li>
+            </ul>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<div id='anchor-fitness-goals'></div>", unsafe_allow_html=True)
             st.subheader('🎯 健身目标（同龄人5-10%）')
             
             # --- 1. 新增/修改目标逻辑 (改为直接显示，不再使用 expander) ---
@@ -2486,6 +2501,7 @@ try:
                                 st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div id='anchor-diet-plan'></div>", unsafe_allow_html=True)
             st.subheader('🍽️ 饮食方案')
             
             # --- 饮食方案新增/修改逻辑 ---
@@ -2623,6 +2639,7 @@ try:
                     weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{latest_r['weight']:.1f}公斤</span>"
             
             # 使用 align-items: baseline 确保文字在同一水平基准上
+            st.markdown("<div id='anchor-weight-record'></div>", unsafe_allow_html=True)
             st.markdown(f"<div style='display: flex; align-items: baseline; margin-bottom: 10px;'><h3 style='margin: 0;'>⚖️ 体重记录</h3>{weight_info}</div>", unsafe_allow_html=True)
             
             # --- 🛠️ v11.9.20: 极致对齐：采用双行结构 + 底部基准对齐 ---
@@ -2707,6 +2724,7 @@ try:
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
             # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
+            st.markdown("<div id='anchor-weekly-plan'></div>", unsafe_allow_html=True)
             st.markdown("<div id='training-edit-anchor'></div>", unsafe_allow_html=True)
             st.subheader('🏋️ 每周运动计划')
             
@@ -2802,6 +2820,7 @@ try:
                                 st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div id='anchor-project-record'></div>", unsafe_allow_html=True)
             st.subheader('✅ 项目完成记录')
             
             record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
@@ -2914,6 +2933,7 @@ try:
                 idx += 1
                 
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div id='anchor-history-performance'></div>", unsafe_allow_html=True)
             st.subheader('📈 重训项目历史表现')
             
             all_exercises_formatted = [f"上肢日-{ex}" for ex in upper_exercises] + [f"下肢日-{ex}" for ex in lower_exercises]
