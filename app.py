@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.18"
+VERSION = "11.13.19"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2802,7 +2802,7 @@ try:
                                 st.rerun()
 
             st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader('✅ 每次项目完成记录')
+            st.subheader('✅ 项目完成记录')
             
             record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
             date_str = record_date.strftime("%Y-%m-%d")
