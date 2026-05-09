@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.14"
+VERSION = "11.13.15"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2966,6 +2966,48 @@ try:
                         with col_chart:
                             st.altair_chart(chart, use_container_width=True)
                             st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
+                            
+                        st.markdown("<br><br>", unsafe_allow_html=True)
+                        st.subheader(f'📝 【{selected_ex}】历史数据明细与修改')
+                        
+                        col_d, col_w, col_r, col_s, col_u = st.columns([0.25, 0.2, 0.2, 0.2, 0.15], vertical_alignment="center")
+                        col_d.markdown("**日期**")
+                        col_w.markdown("**重量(kg)**")
+                        col_r.markdown("**次数**")
+                        col_s.markdown("**组数**")
+                        col_u.markdown("**更新**")
+                        
+                        st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+                        
+                        cat_str = "上肢重训" if selected_ex in upper_exercises else "下肢重训"
+                        hist_msg_ph = st.empty()
+                        
+                        for _, row in ex_df.sort_values(by='record_date', ascending=False).iterrows():
+                            r_date = row['record_date'].strftime('%Y-%m-%d') if isinstance(row['record_date'], pd.Timestamp) else row['record_date']
+                            
+                            k_w_hist = f"h_w_{r_date}_{selected_ex}"
+                            k_r_hist = f"h_r_{r_date}_{selected_ex}"
+                            k_s_hist = f"h_s_{r_date}_{selected_ex}"
+                            
+                            hc_d, hc_w, hc_r, hc_s, hc_u = st.columns([0.25, 0.2, 0.2, 0.2, 0.15], vertical_alignment="center")
+                            
+                            with hc_d:
+                                st.markdown(f"<div style='padding-top: 5px;'><b>{r_date}</b></div>", unsafe_allow_html=True)
+                            with hc_w:
+                                hw_val = st.number_input("w", min_value=0.0, value=float(row['weight']), step=0.5, key=k_w_hist, label_visibility="collapsed")
+                            with hc_r:
+                                hr_val = st.number_input("r", min_value=0, value=int(row['reps']), step=1, key=k_r_hist, label_visibility="collapsed")
+                            with hc_s:
+                                hs_val = st.number_input("s", min_value=0, value=int(row['sets']), step=1, key=k_s_hist, label_visibility="collapsed")
+                            with hc_u:
+                                if st.button("更新", key=f"h_upd_{r_date}_{selected_ex}", use_container_width=True):
+                                    if hw_val <= 0 or hr_val <= 0 or hs_val <= 0:
+                                        hist_msg_ph.error(f"⚠️ 【{selected_ex}】({r_date}) 更新失败：重量、次数、组数均必须大于0！")
+                                    else:
+                                        if add_dad_fitness_record(r_date, cat_str, selected_ex, hw_val, hr_val, hs_val):
+                                            st.session_state["fitness_record_toast"] = f"✅ 【{selected_ex}】({r_date}) 已更新！"
+                                            trigger_realtime_backup()
+                                            st.rerun()
                     else:
                         st.info(f"尚无【{selected_ex}】的历史记录。")
                 else:
