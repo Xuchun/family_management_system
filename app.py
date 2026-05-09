@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.8"
+VERSION = "11.13.9"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2912,12 +2912,22 @@ try:
                         ex_df['record_date'] = pd.to_datetime(ex_df['record_date'])
                         ex_df = ex_df.sort_values(by='record_date')
                         
+                        min_date = (ex_df['record_date'].min() - pd.Timedelta(days=5)).isoformat()
+                        max_date = (ex_df['record_date'].max() + pd.Timedelta(days=5)).isoformat()
+                        
+                        min_w = max(0, float(ex_df['weight'].min()) * 0.8)
+                        max_w = float(ex_df['weight'].max()) * 1.2
+                        
+                        min_r = max(0, float(ex_df['reps'].min()) * 0.8)
+                        max_r = float(ex_df['reps'].max()) * 1.2
+                        
                         base = alt.Chart(ex_df).encode(
-                            x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45))
+                            x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45), 
+                                    scale=alt.Scale(domain=[min_date, max_date]))
                         )
                         
                         base_weight = base.encode(
-                            y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(zero=False)),
+                            y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(domain=[min_w, max_w])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
                         line_weight = base_weight.mark_line(color='#3b82f6')
@@ -2926,7 +2936,7 @@ try:
                         )
                         
                         base_reps = base.encode(
-                            y=alt.Y('reps:Q', title='次数', scale=alt.Scale(zero=False)),
+                            y=alt.Y('reps:Q', title='次数', scale=alt.Scale(domain=[min_r, max_r])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
                         line_reps = base_reps.mark_line(color='#ef4444')
