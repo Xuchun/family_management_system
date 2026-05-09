@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.10"
+VERSION = "11.13.11"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2921,18 +2921,23 @@ try:
                         min_r = max(0, float(ex_df['reps'].min()) * 0.8)
                         max_r = float(ex_df['reps'].max()) * 1.2
                         
-                        base = alt.Chart(ex_df).encode(
+                        top_base = alt.Chart(ex_df).encode(
+                            x=alt.X('record_date:T', title=None, axis=alt.Axis(labels=False, ticks=False, domain=False), 
+                                    scale=alt.Scale(domain=[min_date, max_date]))
+                        )
+                        
+                        bottom_base = alt.Chart(ex_df).encode(
                             x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45), 
                                     scale=alt.Scale(domain=[min_date, max_date]))
                         )
                         
-                        base_weight = base.encode(
+                        base_weight = top_base.encode(
                             y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(domain=[min_w, max_w])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
                         line_weight = base_weight.mark_line(point=True, color='#3b82f6')
                         
-                        base_reps = base.encode(
+                        base_reps = top_base.encode(
                             y=alt.Y('reps:Q', title='次数', scale=alt.Scale(domain=[min_r, max_r])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
@@ -2944,14 +2949,14 @@ try:
                             height=250
                         )
                         
-                        bar_sets = base.encode(
+                        bar_sets = bottom_base.encode(
                             y=alt.Y('sets:Q', title='组数', axis=alt.Axis(tickMinStep=1)),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         ).mark_bar(size=15, color='#10b981', opacity=0.8).properties(
                             height=100
                         )
                         
-                        chart = alt.vconcat(top_chart, bar_sets).resolve_scale(
+                        chart = alt.vconcat(top_chart, bar_sets, spacing=0).resolve_scale(
                             x='shared'
                         ).interactive()
                         
