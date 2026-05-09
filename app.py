@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.15"
+VERSION = "11.13.16"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -690,6 +690,22 @@ def add_dad_fitness_record(date, category, exercise, weight, reps, sets):
             return True
     except Exception as e:
         print(f"Error adding fitness record: {e}")
+        return False
+
+def delete_dad_fitness_record(date, exercise):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id, exercise FROM dad_fitness_records WHERE record_date = ?", (date,))
+            deleted = False
+            for row in c.fetchall():
+                if decrypt_str(row[1]) == exercise:
+                    c.execute("DELETE FROM dad_fitness_records WHERE id = ?", (row[0],))
+                    deleted = True
+            conn.commit()
+            return deleted
+    except Exception as e:
+        print(f"Error deleting fitness record: {e}")
         return False
 
 def get_latest_fitness_records():
@@ -2970,12 +2986,12 @@ try:
                         st.markdown("<br><br>", unsafe_allow_html=True)
                         st.subheader(f'📝 【{selected_ex}】历史数据明细与修改')
                         
-                        col_d, col_w, col_r, col_s, col_u = st.columns([0.25, 0.2, 0.2, 0.2, 0.15], vertical_alignment="center")
+                        col_d, col_w, col_r, col_s, col_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
                         col_d.markdown("**日期**")
                         col_w.markdown("**重量(kg)**")
                         col_r.markdown("**次数**")
                         col_s.markdown("**组数**")
-                        col_u.markdown("**更新**")
+                        col_u.markdown("**操作**")
                         
                         st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
                         
@@ -2989,7 +3005,7 @@ try:
                             k_r_hist = f"h_r_{r_date}_{selected_ex}"
                             k_s_hist = f"h_s_{r_date}_{selected_ex}"
                             
-                            hc_d, hc_w, hc_r, hc_s, hc_u = st.columns([0.25, 0.2, 0.2, 0.2, 0.15], vertical_alignment="center")
+                            hc_d, hc_w, hc_r, hc_s, hc_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
                             
                             with hc_d:
                                 st.markdown(f"<div style='padding-top: 5px;'><b>{r_date}</b></div>", unsafe_allow_html=True)
@@ -3000,12 +3016,20 @@ try:
                             with hc_s:
                                 hs_val = st.number_input("s", min_value=0, value=int(row['sets']), step=1, key=k_s_hist, label_visibility="collapsed")
                             with hc_u:
-                                if st.button("更新", key=f"h_upd_{r_date}_{selected_ex}", use_container_width=True):
-                                    if hw_val <= 0 or hr_val <= 0 or hs_val <= 0:
-                                        hist_msg_ph.error(f"⚠️ 【{selected_ex}】({r_date}) 更新失败：重量、次数、组数均必须大于0！")
-                                    else:
-                                        if add_dad_fitness_record(r_date, cat_str, selected_ex, hw_val, hr_val, hs_val):
-                                            st.session_state["fitness_record_toast"] = f"✅ 【{selected_ex}】({r_date}) 已更新！"
+                                bcol1, bcol2 = st.columns(2)
+                                with bcol1:
+                                    if st.button("更新", key=f"h_upd_{r_date}_{selected_ex}", use_container_width=True):
+                                        if hw_val <= 0 or hr_val <= 0 or hs_val <= 0:
+                                            hist_msg_ph.error(f"⚠️ 【{selected_ex}】({r_date}) 更新失败：重量、次数、组数均必须大于0！")
+                                        else:
+                                            if add_dad_fitness_record(r_date, cat_str, selected_ex, hw_val, hr_val, hs_val):
+                                                st.session_state["fitness_record_toast"] = f"✅ 【{selected_ex}】({r_date}) 已更新！"
+                                                trigger_realtime_backup()
+                                                st.rerun()
+                                with bcol2:
+                                    if st.button("删除", key=f"h_del_{r_date}_{selected_ex}", use_container_width=True):
+                                        if delete_dad_fitness_record(r_date, selected_ex):
+                                            st.session_state["fitness_record_toast"] = f"🗑️ 【{selected_ex}】({r_date}) 已彻底删除！"
                                             trigger_realtime_backup()
                                             st.rerun()
                     else:
