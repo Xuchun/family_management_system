@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.4"
+VERSION = "11.13.5"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -667,8 +667,11 @@ def has_fitness_record(date, exercise):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
-            c.execute("SELECT id FROM dad_fitness_records WHERE record_date = ? AND exercise = ?", (date, encrypt_str(exercise)))
-            return c.fetchone() is not None
+            c.execute("SELECT id, exercise FROM dad_fitness_records WHERE record_date = ?", (date,))
+            for row in c.fetchall():
+                if decrypt_str(row[1]) == exercise:
+                    return True
+            return False
     except:
         return False
 
@@ -676,7 +679,11 @@ def add_dad_fitness_record(date, category, exercise, weight, reps, sets):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
-            c.execute("DELETE FROM dad_fitness_records WHERE record_date = ? AND exercise = ?", (date, encrypt_str(exercise)))
+            c.execute("SELECT id, exercise FROM dad_fitness_records WHERE record_date = ?", (date,))
+            for row in c.fetchall():
+                if decrypt_str(row[1]) == exercise:
+                    c.execute("DELETE FROM dad_fitness_records WHERE id = ?", (row[0],))
+                    
             c.execute("INSERT INTO dad_fitness_records (record_date, category, exercise, weight, reps, sets) VALUES (?, ?, ?, ?, ?, ?)", 
                       (date, encrypt_str(category), encrypt_str(exercise), encrypt_str(str(weight)), encrypt_str(str(reps)), encrypt_str(str(sets))))
             conn.commit()
