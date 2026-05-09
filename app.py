@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.11"
+VERSION = "11.13.12"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2946,14 +2946,16 @@ try:
                         top_chart = alt.layer(line_weight, line_reps).resolve_scale(
                             y='independent'
                         ).properties(
-                            height=250
+                            height=250,
+                            width=700
                         )
                         
                         bar_sets = bottom_base.encode(
                             y=alt.Y('sets:Q', title='组数', axis=alt.Axis(tickMinStep=1)),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         ).mark_bar(size=15, color='#10b981', opacity=0.8).properties(
-                            height=100
+                            height=100,
+                            width=700
                         )
                         
                         chart = alt.vconcat(top_chart, bar_sets, spacing=0).resolve_scale(
