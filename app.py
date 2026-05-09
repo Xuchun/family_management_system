@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.6"
+VERSION = "11.13.7"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2900,10 +2900,11 @@ try:
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader('📈 重训项目历史表现')
             
-            all_exercises = upper_exercises + lower_exercises
-            selected_ex = st.selectbox("选择重训项目查看历史趋势", options=all_exercises, key="history_ex_select")
+            all_exercises_formatted = [f"上肢-{ex}" for ex in upper_exercises] + [f"下肢-{ex}" for ex in lower_exercises]
+            selected_ex_formatted = st.selectbox("选择重训项目查看历史趋势", options=all_exercises_formatted, key="history_ex_select")
             
-            if selected_ex:
+            if selected_ex_formatted:
+                selected_ex = selected_ex_formatted.split("-", 1)[1]
                 all_fr_df = get_all_fitness_records()
                 if not all_fr_df.empty:
                     ex_df = all_fr_df[all_fr_df['exercise'] == selected_ex].copy()
