@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.23"
+VERSION = "11.13.24"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2360,6 +2360,7 @@ try:
                         render_task(row, is_shadow=is_shade, location="comp_tab")
 
         elif selected_tab == '🏋️‍♂️ 爸爸的健身':
+            st.markdown("<div id='anchor-toc' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.markdown("""
             <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <b style="font-size: 1.1em; color: #31333F;">📋 目录</b>
@@ -2500,6 +2501,7 @@ try:
                                 trigger_realtime_backup() # 🛠️ v9.7.6 同步云端
                                 st.rerun()
 
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<div id='anchor-diet-plan' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.subheader('🍽️ 饮食方案')
@@ -2639,6 +2641,7 @@ try:
                     weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{latest_r['weight']:.1f}公斤</span>"
             
             # 使用 align-items: baseline 确保文字在同一水平基准上
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<div id='anchor-weight-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.markdown(f"<div style='display: flex; align-items: baseline; margin-bottom: 10px;'><h3 style='margin: 0;'>⚖️ 体重记录</h3>{weight_info}</div>", unsafe_allow_html=True)
             
@@ -2722,6 +2725,7 @@ try:
 
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
             # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
             st.markdown("<div id='anchor-weekly-plan' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
@@ -2819,6 +2823,7 @@ try:
                                 trigger_realtime_backup()
                                 st.rerun()
 
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<div id='anchor-project-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.subheader('✅ 项目完成记录')
@@ -2932,6 +2937,7 @@ try:
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 idx += 1
                 
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<div id='anchor-history-performance' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.subheader('📈 重训项目历史表现')
@@ -3057,7 +3063,7 @@ try:
                 else:
                     st.info("尚无任何重训历史记录。")
 
-
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
 
         elif selected_tab == '🌸 恩雅的健康':
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
