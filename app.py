@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.12.7"
+VERSION = "11.13.0"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -380,6 +380,17 @@ def init_db():
                   weight TEXT NOT NULL,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 
+    # 13. 每次健身项目记录表
+    c.execute('''CREATE TABLE IF NOT EXISTS dad_fitness_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  record_date TEXT NOT NULL,
+                  category TEXT NOT NULL,
+                  exercise TEXT NOT NULL,
+                  weight TEXT NOT NULL,
+                  reps TEXT NOT NULL,
+                  sets TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
     # 8. 初始化密码
     c.execute("SELECT val FROM system_config WHERE key = 'app_password'")
     if not c.fetchone() and app_pwd:
@@ -650,6 +661,19 @@ def delete_dad_weight_record(rid):
             conn.commit()
             return True
     except:
+        return False
+
+def add_dad_fitness_record(date, category, exercise, weight, reps, sets):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM dad_fitness_records WHERE record_date = ? AND exercise = ?", (date, encrypt_str(exercise)))
+            c.execute("INSERT INTO dad_fitness_records (record_date, category, exercise, weight, reps, sets) VALUES (?, ?, ?, ?, ?, ?)", 
+                      (date, encrypt_str(category), encrypt_str(exercise), encrypt_str(str(weight)), encrypt_str(str(reps)), encrypt_str(str(sets))))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error adding fitness record: {e}")
         return False
 
 def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
@@ -2697,7 +2721,82 @@ try:
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader('✅ 每次健身项目完成记录')
-            st.info('内容可以先为空，我后面会继续加入。')
+            
+            record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
+            date_str = record_date.strftime("%Y-%m-%d")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Header row
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12])
+            col1.markdown("**类别**")
+            col2.markdown("**项目**")
+            col3.markdown("**重量(kg)**")
+            col4.markdown("**次数**")
+            col5.markdown("**组数**")
+            col6.markdown("**保存**")
+            col7.markdown("**清除**")
+            
+            st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+            
+            def render_fitness_row(category, exercise, idx):
+                col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
+                
+                k_w = f"f_w_{idx}"
+                k_r = f"f_r_{idx}"
+                k_s = f"f_s_{idx}"
+                
+                with col_c:
+                    st.markdown(f"<span style='font-size: 0.9em; color: #555;'>{category}</span>", unsafe_allow_html=True)
+                with col_e:
+                    st.markdown(f"<span style='font-weight: bold; font-size: 0.9em;'>{exercise}</span>", unsafe_allow_html=True)
+                with col_w:
+                    w_val = st.number_input("w", min_value=0.0, step=0.5, key=k_w, label_visibility="collapsed")
+                with col_r:
+                    r_val = st.number_input("r", min_value=0, step=1, key=k_r, label_visibility="collapsed")
+                with col_s:
+                    s_val = st.number_input("s", min_value=0, step=1, key=k_s, label_visibility="collapsed")
+                with col_save:
+                    if st.button("保存", key=f"f_save_{idx}", use_container_width=True):
+                        if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                            st.toast(f"✅ 【{exercise}】已保存！")
+                            trigger_realtime_backup()
+                with col_clear:
+                    if st.button("清除", key=f"f_clear_{idx}", use_container_width=True):
+                        st.session_state[k_w] = 0.0
+                        st.session_state[k_r] = 0
+                        st.session_state[k_s] = 0
+                        st.rerun()
+            
+            upper_exercises = [
+                "哑铃侧平举",
+                "高位下拉",
+                "哑铃卧推",
+                "窄握坐姿划船(宽/窄交替)",
+                "面拉（改善驼背）",
+                "肱三曲杆下压（没劲可不做）"
+            ]
+            
+            lower_exercises = [
+                "腿推机（必做，脚位偏高）",
+                "坐姿腿弯举（必做）",
+                "侧平举（必做）",
+                "臀推（没劲可少做几组）",
+                "坐姿腿伸（没劲可不做）"
+            ]
+            
+            idx = 0
+            for ex in upper_exercises:
+                render_fitness_row("上肢重训", ex, idx)
+                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                idx += 1
+                
+            st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+            
+            for ex in lower_exercises:
+                render_fitness_row("下肢重训", ex, idx)
+                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                idx += 1
 
         elif selected_tab == '🌸 恩雅的健康':
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
