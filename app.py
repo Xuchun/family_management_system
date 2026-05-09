@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.0"
+VERSION = "11.13.1"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -676,6 +676,38 @@ def add_dad_fitness_record(date, category, exercise, weight, reps, sets):
         print(f"Error adding fitness record: {e}")
         return False
 
+def get_latest_fitness_records():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_fitness_records ORDER BY record_date DESC, id DESC", conn)
+            latest_records = {}
+            if not df.empty:
+                for _, row in df.iterrows():
+                    ex = decrypt_str(row['exercise'])
+                    if ex not in latest_records:
+                        latest_records[ex] = {
+                            'weight': float(decrypt_str(row['weight'])),
+                            'reps': int(decrypt_str(row['reps'])),
+                            'sets': int(decrypt_str(row['sets']))
+                        }
+            return latest_records
+    except:
+        return {}
+
+def get_all_fitness_records():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            df = pd.read_sql("SELECT * FROM dad_fitness_records ORDER BY record_date DESC, id DESC", conn)
+            if not df.empty:
+                df['category'] = df['category'].apply(decrypt_str)
+                df['exercise'] = df['exercise'].apply(decrypt_str)
+                df['weight'] = df['weight'].apply(lambda x: float(decrypt_str(x)))
+                df['reps'] = df['reps'].apply(lambda x: int(decrypt_str(x)))
+                df['sets'] = df['sets'].apply(lambda x: int(decrypt_str(x)))
+            return df
+    except:
+        return pd.DataFrame()
+
 def extract_date_llm(task_text, fallback_date=None, fallback_recur=None):
     """
     v9.9 - 绝对防线引擎 (Total Comma Firewall)
@@ -988,6 +1020,7 @@ def import_from_report_text(report_text):
     table_row_pattern = re.compile(r"^([0-9- :]{10,16}|无设定)\s*\|\s*(.*?)\s*\|\s*(.*)$")
     period_pattern = re.compile(r"^- (\d{4}-\d{2}-\d{2}): (月经开始|月经结束)$")
     vital_pattern = re.compile(r"^- (\d{4}-\d{2}-\d{2}): 身高 (.*?)cm \| 体重 (.*?)kg$")
+    fitness_rec_pattern = re.compile(r"^- (\d{4}-\d{2}-\d{2}): (.*?) - (.*?) \((.*?)kg x (.*?)次 x (.*?)组\)$")
     
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -996,6 +1029,7 @@ def import_from_report_text(report_text):
     c.execute("DELETE FROM tasks")
     c.execute("DELETE FROM enya_vitals")
     c.execute("DELETE FROM enya_period")
+    c.execute("DELETE FROM dad_fitness_records")
     
     lines = [l.strip() for l in report_text.split('\n') if l.strip()]
     count = 0
@@ -1027,6 +1061,15 @@ def import_from_report_text(report_text):
             date_v, h_v, w_v = m_vital.groups()
             c.execute("INSERT INTO enya_vitals (record_date, height, weight) VALUES (?, ?, ?)", 
                       (date_v, encrypt_str(h_v), encrypt_str(w_v)))
+            count += 1
+            continue
+            
+        # 4. 解析健身项目完成记录
+        m_fitness = fitness_rec_pattern.match(line)
+        if m_fitness:
+            date, cat, ex, w, r, s = m_fitness.groups()
+            c.execute("INSERT INTO dad_fitness_records (record_date, category, exercise, weight, reps, sets) VALUES (?, ?, ?, ?, ?, ?)",
+                      (date, encrypt_str(cat), encrypt_str(ex), encrypt_str(w), encrypt_str(r), encrypt_str(s)))
             count += 1
             continue
 
@@ -1291,7 +1334,14 @@ def generate_master_report():
         lines.append("尚无记录。\n")
     
     lines.append("\n【 📅 健身计划 】\n- (暂无详细记录，待后续添加)\n")
-    lines.append("\n【 ✅ 健身项目完成记录 】\n- (暂无详细记录，待后续添加)\n")
+    
+    lines.append("\n【 ✅ 健身项目完成记录 】\n")
+    fr_df = get_all_fitness_records()
+    if not fr_df.empty:
+        for _, r in fr_df.iterrows():
+            lines.append(f"- {r['record_date']}: {r['category']} - {r['exercise']} ({r['weight']}kg x {r['reps']}次 x {r['sets']}组)\n")
+    else:
+        lines.append("尚无记录。\n")
 
     # --- 📋 健身计划细节 (v11.0) ---
     lines.append(f"\n\n{'='*30} 📋 爸爸的健身训练细节 {'='*30}\n")
@@ -2739,6 +2789,8 @@ try:
             
             st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
             
+            latest_fitness = get_latest_fitness_records()
+            
             def render_fitness_row(category, exercise, idx):
                 col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
                 
@@ -2746,16 +2798,21 @@ try:
                 k_r = f"f_r_{idx}"
                 k_s = f"f_s_{idx}"
                 
+                # Retrieve default values from latest records if available
+                default_w = latest_fitness.get(exercise, {}).get('weight', 0.0)
+                default_r = latest_fitness.get(exercise, {}).get('reps', 0)
+                default_s = latest_fitness.get(exercise, {}).get('sets', 0)
+                
                 with col_c:
                     st.markdown(f"<span style='font-size: 0.9em; color: #555;'>{category}</span>", unsafe_allow_html=True)
                 with col_e:
                     st.markdown(f"<span style='font-weight: bold; font-size: 0.9em;'>{exercise}</span>", unsafe_allow_html=True)
                 with col_w:
-                    w_val = st.number_input("w", min_value=0.0, step=0.5, key=k_w, label_visibility="collapsed")
+                    w_val = st.number_input("w", min_value=0.0, value=float(default_w), step=0.5, key=k_w, label_visibility="collapsed")
                 with col_r:
-                    r_val = st.number_input("r", min_value=0, step=1, key=k_r, label_visibility="collapsed")
+                    r_val = st.number_input("r", min_value=0, value=int(default_r), step=1, key=k_r, label_visibility="collapsed")
                 with col_s:
-                    s_val = st.number_input("s", min_value=0, step=1, key=k_s, label_visibility="collapsed")
+                    s_val = st.number_input("s", min_value=0, value=int(default_s), step=1, key=k_s, label_visibility="collapsed")
                 with col_save:
                     if st.button("保存", key=f"f_save_{idx}", use_container_width=True):
                         if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
