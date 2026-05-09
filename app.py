@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.3"
+VERSION = "11.13.4"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -660,6 +660,15 @@ def delete_dad_weight_record(rid):
             c.execute("DELETE FROM dad_weight_records WHERE id = ?", (rid,))
             conn.commit()
             return True
+    except:
+        return False
+
+def has_fitness_record(date, exercise):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM dad_fitness_records WHERE record_date = ? AND exercise = ?", (date, encrypt_str(exercise)))
+            return c.fetchone() is not None
     except:
         return False
 
@@ -2790,12 +2799,30 @@ try:
             st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
             
             fitness_msg_ph = st.empty()
+            
+            if "fitness_record_toast" in st.session_state:
+                st.toast(st.session_state.pop("fitness_record_toast"))
+                
             latest_fitness = get_latest_fitness_records()
             
             def clear_fitness_row(k_w, k_r, k_s):
                 st.session_state[k_w] = 0.0
                 st.session_state[k_r] = 0
                 st.session_state[k_s] = 0
+
+            @st.dialog("⚠️ 确认覆盖记录")
+            def confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val):
+                st.warning(f"在 {date_str} 这一天，【{exercise}】已经有保存记录了。是否要用当前的数据覆盖它？")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✔️ 确认覆盖", use_container_width=True):
+                        if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                            st.session_state["fitness_record_toast"] = f"✅ 【{exercise}】已被成功覆盖！"
+                            trigger_realtime_backup()
+                            st.rerun()
+                with col2:
+                    if st.button("❌ 取消", use_container_width=True):
+                        st.rerun()
 
             def render_fitness_row(category, exercise, idx):
                 col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
@@ -2824,9 +2851,12 @@ try:
                         if w_val <= 0 or r_val <= 0 or s_val <= 0:
                             fitness_msg_ph.error(f"⚠️ 【{exercise}】保存失败：重量(kg)、次数、组数均必须大于0！")
                         else:
-                            if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
-                                st.toast(f"✅ 【{exercise}】已保存！")
-                                trigger_realtime_backup()
+                            if has_fitness_record(date_str, exercise):
+                                confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val)
+                            else:
+                                if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                                    st.toast(f"✅ 【{exercise}】已保存！")
+                                    trigger_realtime_backup()
                 with col_clear:
                     st.button("清除", key=f"f_clear_{idx}", use_container_width=True, on_click=clear_fitness_row, args=(k_w, k_r, k_s))
             
