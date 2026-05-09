@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.5"
+VERSION = "11.13.6"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2896,6 +2896,49 @@ try:
                 render_fitness_row("下肢重训", ex, idx)
                 st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                 idx += 1
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader('📈 重训项目历史表现')
+            
+            all_exercises = upper_exercises + lower_exercises
+            selected_ex = st.selectbox("选择重训项目查看历史趋势", options=all_exercises, key="history_ex_select")
+            
+            if selected_ex:
+                all_fr_df = get_all_fitness_records()
+                if not all_fr_df.empty:
+                    ex_df = all_fr_df[all_fr_df['exercise'] == selected_ex].copy()
+                    if not ex_df.empty:
+                        ex_df['record_date'] = pd.to_datetime(ex_df['record_date'])
+                        ex_df = ex_df.sort_values(by='record_date')
+                        
+                        base = alt.Chart(ex_df).encode(
+                            x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45))
+                        )
+                        
+                        line_weight = base.mark_line(point=True, color='#3b82f6').encode(
+                            y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(zero=False)),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        )
+                        
+                        line_reps = base.mark_line(point=True, color='#ef4444').encode(
+                            y=alt.Y('reps:Q', title='次数', scale=alt.Scale(zero=False)),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        )
+                        
+                        chart = alt.layer(line_weight, line_reps).resolve_scale(
+                            y='independent'
+                        ).properties(
+                            height=350
+                        ).interactive()
+                        
+                        st.altair_chart(chart, use_container_width=True)
+                        st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span></div>", unsafe_allow_html=True)
+                    else:
+                        st.info(f"尚无【{selected_ex}】的历史记录。")
+                else:
+                    st.info("尚无任何重训历史记录。")
+
+
 
         elif selected_tab == '🌸 恩雅的健康':
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
