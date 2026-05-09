@@ -17,7 +17,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import altair as alt
 
-VERSION = "11.13.9"
+VERSION = "11.13.10"
 ADMIN_EMAIL = "xuchunli@gmail.com"
 
 def hash_password(password):
@@ -2930,28 +2930,33 @@ try:
                             y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(domain=[min_w, max_w])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
-                        line_weight = base_weight.mark_line(color='#3b82f6')
-                        point_weight = base_weight.mark_circle(color='#3b82f6').encode(
-                            size=alt.Size('sets:Q', title='组数', scale=alt.Scale(range=[50, 300]), legend=None)
-                        )
+                        line_weight = base_weight.mark_line(point=True, color='#3b82f6')
                         
                         base_reps = base.encode(
                             y=alt.Y('reps:Q', title='次数', scale=alt.Scale(domain=[min_r, max_r])),
                             tooltip=['record_date', 'weight', 'reps', 'sets']
                         )
-                        line_reps = base_reps.mark_line(color='#ef4444')
-                        point_reps = base_reps.mark_circle(color='#ef4444').encode(
-                            size=alt.Size('sets:Q', title='组数', scale=alt.Scale(range=[50, 300]), legend=None)
-                        )
+                        line_reps = base_reps.mark_line(point=True, color='#ef4444')
                         
-                        chart = alt.layer(line_weight, point_weight, line_reps, point_reps).resolve_scale(
+                        top_chart = alt.layer(line_weight, line_reps).resolve_scale(
                             y='independent'
                         ).properties(
-                            height=350
+                            height=250
+                        )
+                        
+                        bar_sets = base.encode(
+                            y=alt.Y('sets:Q', title='组数', axis=alt.Axis(tickMinStep=1)),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        ).mark_bar(size=15, color='#10b981', opacity=0.8).properties(
+                            height=100
+                        )
+                        
+                        chart = alt.vconcat(top_chart, bar_sets).resolve_scale(
+                            x='shared'
                         ).interactive()
                         
                         st.altair_chart(chart, use_container_width=True)
-                        st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
                     else:
                         st.info(f"尚无【{selected_ex}】的历史记录。")
                 else:
