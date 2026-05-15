@@ -2628,7 +2628,11 @@ try:
             
             # 🛠️ v11.10.3: 计算过去 1 周平均体重或最近一次历史体重 (纯黑色加粗)
             weight_info = ""
+            default_weight = 70.0
             if not weight_df.empty:
+                latest_r_all = weight_df.sort_values(by="record_date", ascending=False).iloc[0]
+                default_weight = float(latest_r_all['weight'])
+                
                 now_sgt = get_now_sgt()
                 seven_days_ago = (now_sgt - timedelta(days=7)).date().strftime("%Y-%m-%d")
                 recent_weights = weight_df[weight_df['record_date'] >= seven_days_ago]
@@ -2637,8 +2641,7 @@ try:
                     avg_w = recent_weights['weight'].mean()
                     weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>过去1周平均体重：{avg_w:.1f}公斤</span>"
                 else:
-                    latest_r = weight_df.sort_values(by="record_date", ascending=False).iloc[0]
-                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{latest_r['weight']:.1f}公斤</span>"
+                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{default_weight:.1f}公斤</span>"
             
             # 使用 align-items: baseline 确保文字在同一水平基准上
             st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
@@ -2656,7 +2659,7 @@ try:
             with col_w1:
                 w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
             with col_w2:
-                w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=70.0, step=0.1, key="w_val_inp", label_visibility="collapsed")
+                w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=default_weight, step=0.1, format="%.1f", key="w_val_inp", label_visibility="collapsed")
             
             def handle_weight_add():
                 d = st.session_state.get("w_date_inp").strftime("%Y-%m-%d")
