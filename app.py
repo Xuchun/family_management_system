@@ -2071,7 +2071,6 @@ try:
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 0.85rem; color: #888; margin-top: -15px;'><span style='margin-right: 5px;'>💡</span>苹果手机必看：由于苹果的安全限制，『添加到主屏幕』会导致每次掉线。请在登录后，使用 Safari 的『<b>添加到书签 / 个人收藏</b>』，以后从书签进入即可永久免密！</p>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
