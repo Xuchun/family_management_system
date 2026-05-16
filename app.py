@@ -2380,6 +2380,27 @@ try:
             """, unsafe_allow_html=True)
             
             st.markdown("<div id='anchor-weight-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            
+            # 提前获取数据以备下载使用
+            weight_df = get_dad_weight_records()
+            
+            # 🛠️ v11.10.3: 计算过去 1 周平均体重或最近一次历史体重 (纯黑色加粗)
+            weight_info = ""
+            default_weight = 70.0
+            if not weight_df.empty:
+                latest_r_all = weight_df.sort_values(by="record_date", ascending=False).iloc[0]
+                default_weight = float(latest_r_all['weight'])
+                
+                now_sgt = get_now_sgt()
+                seven_days_ago = (now_sgt - timedelta(days=7)).date().strftime("%Y-%m-%d")
+                recent_weights = weight_df[weight_df['record_date'] >= seven_days_ago]
+                
+                if not recent_weights.empty:
+                    avg_w = recent_weights['weight'].mean()
+                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>过去1周平均体重：{avg_w:.1f}公斤</span>"
+                else:
+                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{default_weight:.1f}公斤</span>"
+
             st.markdown(f"<div style='display: flex; align-items: baseline; margin-bottom: 10px;'><h3 style='margin: 0;'>⚖️ 体重记录</h3>{weight_info}</div>", unsafe_allow_html=True)
             
             # --- 🛠️ v11.9.20: 极致对齐：采用双行结构 + 底部基准对齐 ---
@@ -3057,28 +3078,6 @@ try:
                             if delete_dad_diet_plan(row['id']):
                                 trigger_realtime_backup()
                                 st.rerun()
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # 提前获取数据以备下载使用
-            weight_df = get_dad_weight_records()
-            
-            # 🛠️ v11.10.3: 计算过去 1 周平均体重或最近一次历史体重 (纯黑色加粗)
-            weight_info = ""
-            default_weight = 70.0
-            if not weight_df.empty:
-                latest_r_all = weight_df.sort_values(by="record_date", ascending=False).iloc[0]
-                default_weight = float(latest_r_all['weight'])
-                
-                now_sgt = get_now_sgt()
-                seven_days_ago = (now_sgt - timedelta(days=7)).date().strftime("%Y-%m-%d")
-                recent_weights = weight_df[weight_df['record_date'] >= seven_days_ago]
-                
-                if not recent_weights.empty:
-                    avg_w = recent_weights['weight'].mean()
-                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>过去1周平均体重：{avg_w:.1f}公斤</span>"
-                else:
-                    weight_info = f"<span style='font-size: 1.1rem; color: #000000; font-weight: bold; margin-left: 15px;'>最新的历史体重（超过一周）：{default_weight:.1f}公斤</span>"
             
             # 使用 align-items: baseline 确保文字在同一水平基准上
             st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
