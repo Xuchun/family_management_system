@@ -717,13 +717,16 @@ def get_latest_fitness_records():
             latest_records = {}
             if not df.empty:
                 for _, row in df.iterrows():
-                    ex = decrypt_str(row['exercise'])
-                    if ex not in latest_records:
-                        latest_records[ex] = {
-                            'weight': float(decrypt_str(row['weight'])),
-                            'reps': int(decrypt_str(row['reps'])),
-                            'sets': int(decrypt_str(row['sets']))
-                        }
+                    try:
+                        ex = decrypt_str(row['exercise'])
+                        if ex not in latest_records:
+                            latest_records[ex] = {
+                                'weight': float(decrypt_str(row['weight'])),
+                                'reps': int(decrypt_str(row['reps'])),
+                                'sets': int(decrypt_str(row['sets']))
+                            }
+                    except Exception:
+                        continue
             return latest_records
     except:
         return {}
@@ -2886,6 +2889,14 @@ try:
                 default_w = latest_fitness.get(exercise, {}).get('weight', 0.0)
                 default_r = latest_fitness.get(exercise, {}).get('reps', 0)
                 default_s = latest_fitness.get(exercise, {}).get('sets', 0)
+                
+                # 显式初始化 Session State，确保刷新后缺省值必定生效
+                if k_w not in st.session_state:
+                    st.session_state[k_w] = float(default_w)
+                if k_r not in st.session_state:
+                    st.session_state[k_r] = int(default_r)
+                if k_s not in st.session_state:
+                    st.session_state[k_s] = int(default_s)
                 
                 with col_c:
                     st.markdown(f"<span style='font-size: 0.9em; color: #555;'>{category}</span>", unsafe_allow_html=True)
