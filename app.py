@@ -44,25 +44,6 @@ st.set_page_config(
 )
 
 import streamlit.components.v1 as components
-# 强力注入 localStorage 恢复机制，对抗 iOS Safari 重启掉线
-components.html("""
-<script>
-    var token = null;
-    try { token = window.localStorage.getItem('family_auth_token'); } catch(e) {}
-    try { if(!token && window.parent) token = window.parent.localStorage.getItem('family_auth_token'); } catch(e) {}
-    
-    if (token) {
-        var hasAuth = false;
-        try { hasAuth = (window.parent.location.href.indexOf('auth_key') !== -1); } 
-        catch(e) { hasAuth = (window.location.href.indexOf('auth_key') !== -1); }
-        
-        if (!hasAuth) {
-            try { window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + '?auth_key=' + token; }
-            catch(e) { window.location.href = window.location.origin + window.location.pathname + '?auth_key=' + token; }
-        }
-    }
-</script>
-""", height=0)
 
 # Cookie 管理器初始化 (放置在顶部以尽早启动加载)
 cookie_manager = stx.CookieManager(key="family_auth_mgr_v2")
@@ -1700,9 +1681,6 @@ try:
                 try {{ document.cookie = c_str; }} catch(e) {{}}
                 try {{ if(window.parent) window.parent.document.cookie = c_str; }} catch(e) {{}}
                 
-                try {{ window.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
-                try {{ window.parent.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
-                
                 // 强制父级窗口也刷新到不带任何参数的 URL
                 var home = window.location.origin + window.location.pathname;
                 if(window.parent) window.parent.location.href = home;
@@ -1741,9 +1719,6 @@ try:
                             var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
                             try {{ document.cookie = c_str; }} catch(e) {{}}
                             try {{ if(window.parent) window.parent.document.cookie = c_str; }} catch(e) {{}}
-                            
-                            try {{ window.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
-                            try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
                         </script>
                     """, height=0)
                     st.success("✅ 登录成功！")
@@ -1824,9 +1799,6 @@ try:
                         var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
                         try {{ document.cookie = c_str; }} catch(e) {{}}
                         try {{ if(window.parent) window.parent.document.cookie = c_str; }} catch(e) {{}}
-                        
-                        try {{ window.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
-                        try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
                     </script>
                 """, height=0)
                 
@@ -2099,6 +2071,7 @@ try:
     c_title, c_menu = st.columns([0.8, 0.2], vertical_alignment="center")
     with c_title:
         st.markdown(f"<h1 class='main-header'>🏠 家庭管理系统 <span style='font-size: 0.8rem; vertical-align: middle; opacity: 0.5;'>v{VERSION}</span></h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 0.85rem; color: #888; margin-top: -15px;'><span style='margin-right: 5px;'>💡</span>苹果手机用户：遇到频繁掉线？点击底部的『分享』图标 -> 『添加到主屏幕』即可永久免密登录。</p>", unsafe_allow_html=True)
         # 如果刚才触发了自动快照备份，给予一个小提示
         for slot in ["12pm", "06pm", "11pm"]:
             msg_key = f"auto_backup_msg_{slot}"
