@@ -1647,11 +1647,10 @@ try:
         if found_token:
             st.session_state["authenticated"] = True
             st.session_state["is_admin"] = (found_token == "authenticated_admin")
-            # 💡 关键：只有在 native cookies 已经同步的情况下才清除 URL 参数
-            # 否则刷新会丢失唯一的凭证
-            if native_cookies.get(AUTH_KEY) in ["authenticated", "authenticated_admin"]:
-                if "auth_key" in st.query_params:
-                    st.query_params.clear()
+            # 💡 关键修改：为了在所有设备（尤其手机浏览器）上永远保持登录，
+            # 不再清除 URL 参数。强制将 auth_key 保留在 URL 中。
+            if st.query_params.get("auth_key") != found_token:
+                st.query_params["auth_key"] = found_token
             st.rerun()
         elif st.session_state["auth_retry_count"] < 12: # 增加重试次数以应对慢速加载
             st.session_state["auth_retry_count"] += 1
@@ -1708,7 +1707,7 @@ try:
                     st.session_state["is_admin"] = False
                     # 设置各种持久化
                     st.query_params["auth_key"] = "authenticated"
-                    exp_date = datetime.now() + timedelta(days=30)
+                    exp_date = datetime.now() + timedelta(days=3650)
                     cookie_manager.set(AUTH_KEY, "authenticated", expires_at=exp_date, path="/")
                     
                     # 强力锁定：使用原生 JS 设置 (关键：现代浏览器跨域环境必须包含 Partitioned; 且 SameSite=None; Secure)
@@ -1788,7 +1787,7 @@ try:
                     st.stop()
                 
                 # 设置管理员持久化 Cookie
-                exp_date = datetime.now() + timedelta(days=30)
+                exp_date = datetime.now() + timedelta(days=3650)
                 cookie_manager.set(AUTH_KEY, "authenticated_admin", expires_at=exp_date, path="/")
                 
                 # 强力锁定：使用原生 JS 设置 (分区 Cookie 锁定)
