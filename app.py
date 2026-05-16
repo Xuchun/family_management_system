@@ -1697,8 +1697,8 @@ try:
         components.html(f"""
             <script>
                 var c_str = '{AUTH_KEY}=LOGGED_OUT; path=/; max-age=86400; SameSite=None; Secure; Partitioned';
-                document.cookie = c_str;
-                if(window.parent) window.parent.document.cookie = c_str;
+                try { document.cookie = c_str; } catch(e) {}
+                try { if(window.parent) window.parent.document.cookie = c_str; } catch(e) {}
                 
                 try {{ window.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
                 try {{ window.parent.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
@@ -1739,8 +1739,8 @@ try:
                     components.html(f"""
                         <script>
                             var c_str = '{AUTH_KEY}=authenticated; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
-                            document.cookie = c_str;
-                            if(window.parent) window.parent.document.cookie = c_str;
+                            try { document.cookie = c_str; } catch(e) {}
+                            try { if(window.parent) window.parent.document.cookie = c_str; } catch(e) {}
                             
                             try {{ window.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
                             try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
@@ -1822,8 +1822,8 @@ try:
                 components.html(f"""
                     <script>
                         var c_str = '{AUTH_KEY}=authenticated_admin; expires={exp_utc}; path=/; SameSite=None; Secure; Partitioned';
-                        document.cookie = c_str;
-                        if(window.parent) window.parent.document.cookie = c_str;
+                        try { document.cookie = c_str; } catch(e) {}
+                        try { if(window.parent) window.parent.document.cookie = c_str; } catch(e) {}
                         
                         try {{ window.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
                         try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
