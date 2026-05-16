@@ -1101,7 +1101,7 @@ def import_from_report_text(report_text):
             count += 1
             continue
             
-        # 4. 解析健身项目完成记录
+        # 4. 解析健身项目完成记录-上肢
         m_fitness = fitness_rec_pattern.match(line)
         if m_fitness:
             date, cat, ex, w, r, s = m_fitness.groups()
@@ -1372,7 +1372,7 @@ def generate_master_report():
     
     lines.append("\n【 📅 健身计划 】\n- (暂无详细记录，待后续添加)\n")
     
-    lines.append("\n【 ✅ 健身项目完成记录 】\n")
+    lines.append("\n【 ✅ 健身项目完成记录-上肢 】\n")
     fr_df = get_all_fitness_records()
     if not fr_df.empty:
         for _, r in fr_df.iterrows():
@@ -2370,7 +2370,7 @@ try:
             <b style="font-size: 1.1em; color: #31333F;">📋 目录</b>
             <ul style="margin-top: 10px; margin-bottom: 0;">
                 <li><a href="#anchor-weight-record" target="_self" style="text-decoration: none; color: #0366d6;">⚖️ 体重记录</a></li>
-                <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录</a></li>
+                <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录-上肢</a></li>
                 <li><a href="#anchor-weekly-plan" target="_self" style="text-decoration: none; color: #0366d6;">🏋️ 每周运动计划</a></li>
                 <li><a href="#anchor-history-performance" target="_self" style="text-decoration: none; color: #0366d6;">📈 重训项目历史表现</a></li>
                 <li><a href="#anchor-fitness-goals" target="_self" style="text-decoration: none; color: #0366d6;">🎯 健身目标（同龄人5-10%）</a></li>
@@ -2487,7 +2487,7 @@ try:
             st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
             # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
             st.markdown("<div id='anchor-project-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
-            st.subheader('✅ 项目完成记录')
+            st.subheader('✅ 项目完成记录-上肢')
             
             record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
             date_str = record_date.strftime("%Y-%m-%d")
