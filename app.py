@@ -2369,16 +2369,449 @@ try:
             <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 25px;">
             <b style="font-size: 1.1em; color: #31333F;">📋 目录</b>
             <ul style="margin-top: 10px; margin-bottom: 0;">
+                <li><a href="#anchor-weight-record" target="_self" style="text-decoration: none; color: #0366d6;">⚖️ 体重记录</a></li>
+                <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录</a></li>
+                <li><a href="#anchor-weekly-plan" target="_self" style="text-decoration: none; color: #0366d6;">🏋️ 每周运动计划</a></li>
+                <li><a href="#anchor-history-performance" target="_self" style="text-decoration: none; color: #0366d6;">📈 重训项目历史表现</a></li>
                 <li><a href="#anchor-fitness-goals" target="_self" style="text-decoration: none; color: #0366d6;">🎯 健身目标（同龄人5-10%）</a></li>
                 <li><a href="#anchor-diet-plan" target="_self" style="text-decoration: none; color: #0366d6;">🍽️ 饮食方案</a></li>
-                <li><a href="#anchor-weight-record" target="_self" style="text-decoration: none; color: #0366d6;">⚖️ 体重记录</a></li>
-                <li><a href="#anchor-weekly-plan" target="_self" style="text-decoration: none; color: #0366d6;">🏋️ 每周运动计划</a></li>
-                <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录</a></li>
-                <li><a href="#anchor-history-performance" target="_self" style="text-decoration: none; color: #0366d6;">📈 重训项目历史表现</a></li>
             </ul>
             </div>
             """, unsafe_allow_html=True)
             
+            st.markdown("<div id='anchor-weight-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='display: flex; align-items: baseline; margin-bottom: 10px;'><h3 style='margin: 0;'>⚖️ 体重记录</h3>{weight_info}</div>", unsafe_allow_html=True)
+            
+            # --- 🛠️ v11.9.20: 极致对齐：采用双行结构 + 底部基准对齐 ---
+            # 第 1 行：单独渲染文本标签
+            col_l1, col_l2, col_l3, col_l4 = st.columns([0.22, 0.23, 0.18, 0.37])
+            col_l1.markdown("<b>日期</b>", unsafe_allow_html=True)
+            col_l2.markdown("<b>体重 (KG)</b>", unsafe_allow_html=True)
+            
+            # 第 2 行：渲染交互组件，统一基准线 (bottom alignment)
+            col_w1, col_w2, col_w3, col_w4 = st.columns([0.22, 0.23, 0.18, 0.37], vertical_alignment="bottom")
+            with col_w1:
+                w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
+            with col_w2:
+                w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=default_weight, step=0.1, format="%.1f", key="w_val_inp", label_visibility="collapsed")
+            
+            def handle_weight_add():
+                d = st.session_state.get("w_date_inp").strftime("%Y-%m-%d")
+                v = st.session_state.get("w_val_inp")
+                if add_dad_weight_record(d, v):
+                    st.session_state["_weight_msg"] = ("toast", "✅ 体重记录已添加！")
+                    trigger_realtime_backup()
+            
+            with col_w3:
+                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=False, key="btn_w_add_v20")
+            
+            with col_w4:
+                if not weight_df.empty:
+                    # 导出 CSV 逻辑
+                    export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                    csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="下载历史体重数据(csv)",
+                        data=csv_data,
+                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
+                        mime='text/csv',
+                        use_container_width=False,
+                        key="row_weight_dl_v20"
+                    )
+            
+            if "_weight_msg" in st.session_state:
+                m_type, m_txt = st.session_state.pop("_weight_msg")
+                if m_type == "toast": st.toast(m_txt, icon="⚖️")
+
+            # --- 体重趋势图表 ---
+            if not weight_df.empty:
+                # 🛠️ v11.9.8: 汉化图表字段
+                chart_data = weight_df.copy()
+                chart_data = chart_data.rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
+                chart_data['日期'] = pd.to_datetime(chart_data['日期'])
+                
+                # 🛠️ v11.9.6: 使用 Altair 自定义纵坐标 (±3kg)
+                y_min = float(chart_data['体重(KG)'].min()) - 3.0
+                y_max = float(chart_data['体重(KG)'].max()) + 3.0
+                
+                chart = alt.Chart(chart_data).mark_line(point=True).encode(
+                    x=alt.X('日期:T', title='日期', axis=alt.Axis(format='%Y年%m月', labelAngle=-45)),
+                    y=alt.Y('体重(KG):Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
+                    tooltip=['日期', '体重(KG)']
+                ).properties(height=300).interactive()
+                
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                st.altair_chart(chart, use_container_width=True)
+                
+                # --- 历史数据控制行 (仅保留查看开关) ---
+                show_history = st.toggle("📜 表格显示历史体重数据", key="show_weight_history")
+
+                if show_history:
+                    st.markdown("---")
+                    hist_df = weight_df.sort_values(by="record_date", ascending=False)
+                    for _, r in hist_df.iterrows():
+                        h_cols = st.columns([0.4, 0.4, 0.2])
+                        h_cols[0].write(f"📅 {r['record_date']}")
+                        h_cols[1].write(f"⚖️ {r['weight']} KG")
+                        if h_cols[2].button("🗑️", key=f"del_weight_{r['id']}", help="删除此记录"):
+                            if delete_dad_weight_record(r['id']):
+                                trigger_realtime_backup()
+                                st.rerun()
+            else:
+                st.info("尚无体重记录，请在上方输入并添加。")
+
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+            # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
+            st.markdown("<div id='anchor-project-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            st.subheader('✅ 项目完成记录')
+            
+            record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
+            date_str = record_date.strftime("%Y-%m-%d")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Header row
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12])
+            col1.markdown("**类别**")
+            col2.markdown("**项目**")
+            col3.markdown("**重量(kg)**")
+            col4.markdown("**次数**")
+            col5.markdown("**组数**")
+            col6.markdown("**保存**")
+            col7.markdown("**清除**")
+            
+            st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+            
+            fitness_msg_ph = st.empty()
+            
+            if "fitness_record_toast" in st.session_state:
+                st.toast(st.session_state.pop("fitness_record_toast"))
+                
+            latest_fitness = get_latest_fitness_records()
+            
+            def clear_fitness_row(k_w, k_r, k_s):
+                st.session_state[k_w] = 0.0
+                st.session_state[k_r] = 0
+                st.session_state[k_s] = 0
+
+            @st.dialog("⚠️ 确认覆盖记录")
+            def confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val):
+                st.warning(f"在 {date_str} 这一天，【{exercise}】已经有保存记录了。是否要用当前的数据覆盖它？")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✔️ 确认覆盖", use_container_width=True):
+                        if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                            st.session_state["fitness_record_toast"] = f"✅ 【{exercise}】已被成功覆盖！"
+                            trigger_realtime_backup()
+                            st.rerun()
+                with col2:
+                    if st.button("❌ 取消", use_container_width=True):
+                        st.rerun()
+
+            def render_fitness_row(category, exercise, idx):
+                col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
+                
+                k_w = f"f_w_{idx}"
+                k_r = f"f_r_{idx}"
+                k_s = f"f_s_{idx}"
+                
+                # Retrieve default values from latest records if available
+                default_w = latest_fitness.get(exercise, {}).get('weight', 0.0)
+                default_r = latest_fitness.get(exercise, {}).get('reps', 0)
+                default_s = latest_fitness.get(exercise, {}).get('sets', 0)
+                
+                # 显式初始化 Session State，确保刷新后缺省值必定生效
+                if k_w not in st.session_state:
+                    st.session_state[k_w] = float(default_w)
+                if k_r not in st.session_state:
+                    st.session_state[k_r] = int(default_r)
+                if k_s not in st.session_state:
+                    st.session_state[k_s] = int(default_s)
+                
+                with col_c:
+                    st.markdown(f"<span style='font-size: 0.9em; color: #555;'>{category}</span>", unsafe_allow_html=True)
+                with col_e:
+                    st.markdown(f"<span style='font-weight: bold; font-size: 0.9em;'>{exercise}</span>", unsafe_allow_html=True)
+                with col_w:
+                    w_val = st.number_input("w", min_value=0.0, value=float(default_w), step=0.5, key=k_w, label_visibility="collapsed")
+                with col_r:
+                    r_val = st.number_input("r", min_value=0, value=int(default_r), step=1, key=k_r, label_visibility="collapsed")
+                with col_s:
+                    s_val = st.number_input("s", min_value=0, value=int(default_s), step=1, key=k_s, label_visibility="collapsed")
+                with col_save:
+                    if st.button("保存", key=f"f_save_{idx}", use_container_width=True):
+                        if w_val <= 0 or r_val <= 0 or s_val <= 0:
+                            fitness_msg_ph.error(f"⚠️ 【{exercise}】保存失败：重量(kg)、次数、组数均必须大于0！")
+                        else:
+                            if has_fitness_record(date_str, exercise):
+                                confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val)
+                            else:
+                                if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
+                                    st.toast(f"✅ 【{exercise}】已保存！")
+                                    trigger_realtime_backup()
+                with col_clear:
+                    st.button("清除", key=f"f_clear_{idx}", use_container_width=True, on_click=clear_fitness_row, args=(k_w, k_r, k_s))
+            
+            upper_exercises = [
+                "哑铃侧平举",
+                "高位下拉",
+                "哑铃卧推",
+                "窄握坐姿划船(宽/窄交替)",
+                "面拉（改善驼背）",
+                "肱三曲杆下压（没劲可不做）"
+            ]
+            
+            lower_exercises = [
+                "腿推机（必做，脚位偏高）",
+                "坐姿腿弯举（必做）",
+                "侧平举（必做）",
+                "臀推（没劲可少做几组）",
+                "坐姿腿伸（没劲可不做）"
+            ]
+            
+            idx = 0
+            for ex in upper_exercises:
+                render_fitness_row("上肢重训日", ex, idx)
+                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                idx += 1
+                
+            st.markdown("<div style='text-align: right; margin-bottom: 10px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+            
+            for ex in lower_exercises:
+                render_fitness_row("下肢重训日", ex, idx)
+                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                idx += 1
+                
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div id='anchor-weekly-plan' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div id='training-edit-anchor'></div>", unsafe_allow_html=True)
+            st.subheader('🏋️ 每周运动计划')
+            
+            if st.session_state.get("scroll_to_train_edit"):
+                st.session_state["scroll_to_train_edit"] = False
+                components.html("""
+                    <script>
+                        setTimeout(function() {
+                            var elements = window.parent.document.querySelectorAll('div[data-testid="stMarkdownContainer"]');
+                            for (var i = 0; i < elements.length; i++) {
+                                if (elements[i].innerText.includes("每周运动计划") || elements[i].innerHTML.includes("training-edit-anchor")) {
+                                    elements[i].scrollIntoView({behavior: "smooth", block: "start"});
+                                    break;
+                                }
+                            }
+                        }, 500);
+                    </script>
+                """, height=0)
+            
+            # --- 重量训练细节 CRUD (v11.0) ---
+            train_to_edit = st.session_state.get("train_to_edit", None)
+            cols_t_inp = st.columns([0.25, 0.55, 0.2])
+            
+            with cols_t_inp[0]:
+                st.markdown("<b>日期</b>", unsafe_allow_html=True)
+                t_day = st.text_input("日期", 
+                                      placeholder="如：周二", key="t_day_inp", label_visibility="collapsed")
+            with cols_t_inp[1]:
+                st.markdown("<b>训练内容</b>", unsafe_allow_html=True)
+                curr_t_val = st.session_state.get("t_content_inp", "")
+                if not curr_t_val and train_to_edit: curr_t_val = train_to_edit['train_content']
+                t_lines = curr_t_val.count('\n') + 1
+                t_h = min(400, max(40, t_lines * 24 + 16))
+                t_content = st.text_area("训练内容", 
+                                         height=t_h, key="t_content_inp", label_visibility="collapsed")
+
+            def handle_train_add():
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if add_dad_training_detail(d, c):
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+
+            def handle_train_update(tid):
+                d = st.session_state.get("t_day_inp", "").strip()
+                c = st.session_state.get("t_content_inp", "").strip()
+                if d and c:
+                    if update_dad_training_detail(tid, d, c):
+                        st.session_state.pop("train_to_edit", None)
+                        st.session_state["t_day_inp"] = ""
+                        st.session_state["t_content_inp"] = ""
+                        trigger_realtime_backup()
+
+            def handle_train_cancel():
+                st.session_state.pop("train_to_edit", None)
+                st.session_state["t_day_inp"] = ""
+                st.session_state["t_content_inp"] = ""
+
+            with cols_t_inp[2]:
+                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
+                if train_to_edit:
+                    st.button("💾 更新", key="t_up_btn", use_container_width=False, on_click=handle_train_update, args=(train_to_edit['id'],))
+                    st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
+                else:
+                    st.button("➕ 添加", key="t_add_btn", use_container_width=False, on_click=handle_train_add)
+
+            # 🛠️ v11.9.24: 定义统一的修改回调，移出循环以确保响应性
+            def trigger_train_edit(r):
+                st.session_state["train_to_edit"] = r
+                # 注意：这里需要立即同步到 widget 的 key 中
+                st.session_state["t_day_inp"] = r['train_day']
+                st.session_state["t_content_inp"] = r['train_content']
+                st.session_state["scroll_to_train_edit"] = True
+
+            # 显示训练细节列表
+            train_df = get_dad_training_details()
+            if not train_df.empty:
+                for _, row in train_df.iterrows():
+                    st.markdown("<div class='train-row-marker'></div>", unsafe_allow_html=True)
+                    t_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
+                    with t_row_cols[0]:
+                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['train_day']}</b></div>", unsafe_allow_html=True)
+                    with t_row_cols[1]:
+                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
+                    with t_row_cols[2]:
+                        st.button("✏️", key=f"edit_ftrain_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
+                    with t_row_cols[3]:
+                        if st.button("🗑️", key=f"del_ftrain_{row['id']}"):
+                            if delete_dad_training_detail(row['id']):
+                                trigger_realtime_backup()
+                                st.rerun()
+
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div id='anchor-history-performance' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            st.subheader('📈 重训项目历史表现')
+            
+            all_exercises_formatted = [f"上肢日-{ex}" for ex in upper_exercises] + [f"下肢日-{ex}" for ex in lower_exercises]
+            selected_ex_formatted = st.selectbox("选择重训项目查看历史趋势", options=all_exercises_formatted, key="history_ex_select")
+            
+            if selected_ex_formatted:
+                selected_ex = selected_ex_formatted.split("-", 1)[1]
+                all_fr_df = get_all_fitness_records()
+                if not all_fr_df.empty:
+                    ex_df = all_fr_df[all_fr_df['exercise'] == selected_ex].copy()
+                    if not ex_df.empty:
+                        ex_df['record_date'] = pd.to_datetime(ex_df['record_date'])
+                        ex_df = ex_df.sort_values(by='record_date')
+                        
+                        min_date = (ex_df['record_date'].min() - pd.Timedelta(days=5)).isoformat()
+                        max_date = (ex_df['record_date'].max() + pd.Timedelta(days=5)).isoformat()
+                        
+                        min_w = max(0, float(ex_df['weight'].min()) * 0.8)
+                        max_w = float(ex_df['weight'].max()) * 1.2
+                        
+                        min_r = max(0, float(ex_df['reps'].min()) * 0.8)
+                        max_r = float(ex_df['reps'].max()) * 1.2
+                        
+                        top_base = alt.Chart(ex_df).encode(
+                            x=alt.X('record_date:T', title=None, axis=alt.Axis(labels=False, ticks=False, domain=False), 
+                                    scale=alt.Scale(domain=[min_date, max_date]))
+                        )
+                        
+                        bottom_base = alt.Chart(ex_df).encode(
+                            x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45), 
+                                    scale=alt.Scale(domain=[min_date, max_date]))
+                        )
+                        
+                        base_weight = top_base.encode(
+                            y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(domain=[min_w, max_w])),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        )
+                        line_weight = base_weight.mark_line(point=True, color='#3b82f6')
+                        
+                        base_reps = top_base.encode(
+                            y=alt.Y('reps:Q', title='次数', scale=alt.Scale(domain=[min_r, max_r])),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        )
+                        line_reps = base_reps.mark_line(point=True, color='#ef4444')
+                        
+                        top_chart = alt.layer(line_weight, line_reps).resolve_scale(
+                            y='independent'
+                        ).properties(
+                            height=250,
+                            width="container"
+                        )
+                        
+                        bar_sets = bottom_base.encode(
+                            y=alt.Y('sets:Q', title='组数', axis=alt.Axis(tickMinStep=1)),
+                            tooltip=['record_date', 'weight', 'reps', 'sets']
+                        ).mark_bar(size=15, color='#10b981', opacity=0.8).properties(
+                            height=100,
+                            width="container"
+                        )
+                        
+                        chart = alt.vconcat(top_chart, bar_sets, spacing=0).resolve_scale(
+                            x='shared'
+                        ).interactive()
+                        
+                        col_chart, _ = st.columns([4, 1])
+                        with col_chart:
+                            st.altair_chart(chart, use_container_width=True)
+                            st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
+                            
+                        st.markdown("<div style='text-align: right; margin-top: 10px; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+                        st.markdown("<br><br>", unsafe_allow_html=True)
+                        st.subheader(f'📝 【{selected_ex}】历史数据明细与修改')
+                        
+                        col_d, col_w, col_r, col_s, col_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
+                        col_d.markdown("**日期**")
+                        col_w.markdown("**重量(kg)**")
+                        col_r.markdown("**次数**")
+                        col_s.markdown("**组数**")
+                        col_u.markdown("**操作**")
+                        
+                        st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+                        
+                        cat_str = "上肢重训日" if selected_ex in upper_exercises else "下肢重训日"
+                        hist_msg_ph = st.empty()
+                        
+                        for _, row in ex_df.sort_values(by='record_date', ascending=False).iterrows():
+                            r_date = row['record_date'].strftime('%Y-%m-%d') if isinstance(row['record_date'], pd.Timestamp) else row['record_date']
+                            
+                            k_w_hist = f"h_w_{r_date}_{selected_ex}"
+                            k_r_hist = f"h_r_{r_date}_{selected_ex}"
+                            k_s_hist = f"h_s_{r_date}_{selected_ex}"
+                            
+                            hc_d, hc_w, hc_r, hc_s, hc_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
+                            
+                            with hc_d:
+                                st.markdown(f"<div style='padding-top: 5px;'><b>{r_date}</b></div>", unsafe_allow_html=True)
+                            with hc_w:
+                                hw_val = st.number_input("w", min_value=0.0, value=float(row['weight']), step=0.5, key=k_w_hist, label_visibility="collapsed")
+                            with hc_r:
+                                hr_val = st.number_input("r", min_value=0, value=int(row['reps']), step=1, key=k_r_hist, label_visibility="collapsed")
+                            with hc_s:
+                                hs_val = st.number_input("s", min_value=0, value=int(row['sets']), step=1, key=k_s_hist, label_visibility="collapsed")
+                            with hc_u:
+                                bcol1, bcol2 = st.columns(2)
+                                with bcol1:
+                                    if st.button("更新", key=f"h_upd_{r_date}_{selected_ex}", use_container_width=True):
+                                        if hw_val <= 0 or hr_val <= 0 or hs_val <= 0:
+                                            hist_msg_ph.error(f"⚠️ 【{selected_ex}】({r_date}) 更新失败：重量、次数、组数均必须大于0！")
+                                        else:
+                                            if add_dad_fitness_record(r_date, cat_str, selected_ex, hw_val, hr_val, hs_val):
+                                                st.session_state["fitness_record_toast"] = f"✅ 【{selected_ex}】({r_date}) 已更新！"
+                                                trigger_realtime_backup()
+                                                st.rerun()
+                                with bcol2:
+                                    if st.button("删除", key=f"h_del_{r_date}_{selected_ex}", use_container_width=True):
+                                        if delete_dad_fitness_record(r_date, selected_ex):
+                                            st.session_state["fitness_record_toast"] = f"🗑️ 【{selected_ex}】({r_date}) 已彻底删除！"
+                                            trigger_realtime_backup()
+                                            st.rerun()
+                    else:
+                        st.info(f"尚无【{selected_ex}】的历史记录。")
+                else:
+                    st.info("尚无任何重训历史记录。")
+
+            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
+
             st.markdown("<div id='anchor-fitness-goals' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
             st.subheader('🎯 健身目标（同龄人5-10%）')
             
@@ -2649,439 +3082,6 @@ try:
             
             # 使用 align-items: baseline 确保文字在同一水平基准上
             st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-            st.markdown("<div id='anchor-weight-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='display: flex; align-items: baseline; margin-bottom: 10px;'><h3 style='margin: 0;'>⚖️ 体重记录</h3>{weight_info}</div>", unsafe_allow_html=True)
-            
-            # --- 🛠️ v11.9.20: 极致对齐：采用双行结构 + 底部基准对齐 ---
-            # 第 1 行：单独渲染文本标签
-            col_l1, col_l2, col_l3, col_l4 = st.columns([0.22, 0.23, 0.18, 0.37])
-            col_l1.markdown("<b>日期</b>", unsafe_allow_html=True)
-            col_l2.markdown("<b>体重 (KG)</b>", unsafe_allow_html=True)
-            
-            # 第 2 行：渲染交互组件，统一基准线 (bottom alignment)
-            col_w1, col_w2, col_w3, col_w4 = st.columns([0.22, 0.23, 0.18, 0.37], vertical_alignment="bottom")
-            with col_w1:
-                w_date = st.date_input("记录日期", value=get_now_sgt().date(), key="w_date_inp", label_visibility="collapsed")
-            with col_w2:
-                w_val = st.number_input("体重数值", min_value=30.0, max_value=200.0, value=default_weight, step=0.1, format="%.1f", key="w_val_inp", label_visibility="collapsed")
-            
-            def handle_weight_add():
-                d = st.session_state.get("w_date_inp").strftime("%Y-%m-%d")
-                v = st.session_state.get("w_val_inp")
-                if add_dad_weight_record(d, v):
-                    st.session_state["_weight_msg"] = ("toast", "✅ 体重记录已添加！")
-                    trigger_realtime_backup()
-            
-            with col_w3:
-                st.button("➕ 添加记录", on_click=handle_weight_add, use_container_width=False, key="btn_w_add_v20")
-            
-            with col_w4:
-                if not weight_df.empty:
-                    # 导出 CSV 逻辑
-                    export_df = weight_df.copy().rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
-                    csv_data = export_df.sort_values(by="日期", ascending=False).to_csv(index=False).encode('utf-8-sig')
-                    st.download_button(
-                        label="下载历史体重数据(csv)",
-                        data=csv_data,
-                        file_name=f"weight_history_{get_now_sgt().strftime('%Y%m%d')}.csv",
-                        mime='text/csv',
-                        use_container_width=False,
-                        key="row_weight_dl_v20"
-                    )
-            
-            if "_weight_msg" in st.session_state:
-                m_type, m_txt = st.session_state.pop("_weight_msg")
-                if m_type == "toast": st.toast(m_txt, icon="⚖️")
-
-            # --- 体重趋势图表 ---
-            if not weight_df.empty:
-                # 🛠️ v11.9.8: 汉化图表字段
-                chart_data = weight_df.copy()
-                chart_data = chart_data.rename(columns={'record_date': '日期', 'weight': '体重(KG)'})
-                chart_data['日期'] = pd.to_datetime(chart_data['日期'])
-                
-                # 🛠️ v11.9.6: 使用 Altair 自定义纵坐标 (±3kg)
-                y_min = float(chart_data['体重(KG)'].min()) - 3.0
-                y_max = float(chart_data['体重(KG)'].max()) + 3.0
-                
-                chart = alt.Chart(chart_data).mark_line(point=True).encode(
-                    x=alt.X('日期:T', title='日期', axis=alt.Axis(format='%Y年%m月', labelAngle=-45)),
-                    y=alt.Y('体重(KG):Q', title='体重 (KG)', scale=alt.Scale(domain=[y_min, y_max])),
-                    tooltip=['日期', '体重(KG)']
-                ).properties(height=300).interactive()
-                
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                st.altair_chart(chart, use_container_width=True)
-                
-                # --- 历史数据控制行 (仅保留查看开关) ---
-                show_history = st.toggle("📜 表格显示历史体重数据", key="show_weight_history")
-
-                if show_history:
-                    st.markdown("---")
-                    hist_df = weight_df.sort_values(by="record_date", ascending=False)
-                    for _, r in hist_df.iterrows():
-                        h_cols = st.columns([0.4, 0.4, 0.2])
-                        h_cols[0].write(f"📅 {r['record_date']}")
-                        h_cols[1].write(f"⚖️ {r['weight']} KG")
-                        if h_cols[2].button("🗑️", key=f"del_weight_{r['id']}", help="删除此记录"):
-                            if delete_dad_weight_record(r['id']):
-                                trigger_realtime_backup()
-                                st.rerun()
-            else:
-                st.info("尚无体重记录，请在上方输入并添加。")
-
-            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-
-            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
-            # --- 🛠️ v11.9.24: 自动定位到修改区域 ---
-            st.markdown("<div id='anchor-weekly-plan' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
-            st.markdown("<div id='training-edit-anchor'></div>", unsafe_allow_html=True)
-            st.subheader('🏋️ 每周运动计划')
-            
-            if st.session_state.get("scroll_to_train_edit"):
-                st.session_state["scroll_to_train_edit"] = False
-                components.html("""
-                    <script>
-                        setTimeout(function() {
-                            var elements = window.parent.document.querySelectorAll('div[data-testid="stMarkdownContainer"]');
-                            for (var i = 0; i < elements.length; i++) {
-                                if (elements[i].innerText.includes("每周运动计划") || elements[i].innerHTML.includes("training-edit-anchor")) {
-                                    elements[i].scrollIntoView({behavior: "smooth", block: "start"});
-                                    break;
-                                }
-                            }
-                        }, 500);
-                    </script>
-                """, height=0)
-            
-            # --- 重量训练细节 CRUD (v11.0) ---
-            train_to_edit = st.session_state.get("train_to_edit", None)
-            cols_t_inp = st.columns([0.25, 0.55, 0.2])
-            
-            with cols_t_inp[0]:
-                st.markdown("<b>日期</b>", unsafe_allow_html=True)
-                t_day = st.text_input("日期", 
-                                      placeholder="如：周二", key="t_day_inp", label_visibility="collapsed")
-            with cols_t_inp[1]:
-                st.markdown("<b>训练内容</b>", unsafe_allow_html=True)
-                curr_t_val = st.session_state.get("t_content_inp", "")
-                if not curr_t_val and train_to_edit: curr_t_val = train_to_edit['train_content']
-                t_lines = curr_t_val.count('\n') + 1
-                t_h = min(400, max(40, t_lines * 24 + 16))
-                t_content = st.text_area("训练内容", 
-                                         height=t_h, key="t_content_inp", label_visibility="collapsed")
-
-            def handle_train_add():
-                d = st.session_state.get("t_day_inp", "").strip()
-                c = st.session_state.get("t_content_inp", "").strip()
-                if d and c:
-                    if add_dad_training_detail(d, c):
-                        st.session_state["t_day_inp"] = ""
-                        st.session_state["t_content_inp"] = ""
-                        trigger_realtime_backup()
-
-            def handle_train_update(tid):
-                d = st.session_state.get("t_day_inp", "").strip()
-                c = st.session_state.get("t_content_inp", "").strip()
-                if d and c:
-                    if update_dad_training_detail(tid, d, c):
-                        st.session_state.pop("train_to_edit", None)
-                        st.session_state["t_day_inp"] = ""
-                        st.session_state["t_content_inp"] = ""
-                        trigger_realtime_backup()
-
-            def handle_train_cancel():
-                st.session_state.pop("train_to_edit", None)
-                st.session_state["t_day_inp"] = ""
-                st.session_state["t_content_inp"] = ""
-
-            with cols_t_inp[2]:
-                st.markdown("<b>&nbsp;</b>", unsafe_allow_html=True)
-                if train_to_edit:
-                    st.button("💾 更新", key="t_up_btn", use_container_width=False, on_click=handle_train_update, args=(train_to_edit['id'],))
-                    st.button("取消", key="t_can_btn", on_click=handle_train_cancel)
-                else:
-                    st.button("➕ 添加", key="t_add_btn", use_container_width=False, on_click=handle_train_add)
-
-            # 🛠️ v11.9.24: 定义统一的修改回调，移出循环以确保响应性
-            def trigger_train_edit(r):
-                st.session_state["train_to_edit"] = r
-                # 注意：这里需要立即同步到 widget 的 key 中
-                st.session_state["t_day_inp"] = r['train_day']
-                st.session_state["t_content_inp"] = r['train_content']
-                st.session_state["scroll_to_train_edit"] = True
-
-            # 显示训练细节列表
-            train_df = get_dad_training_details()
-            if not train_df.empty:
-                for _, row in train_df.iterrows():
-                    st.markdown("<div class='train-row-marker'></div>", unsafe_allow_html=True)
-                    t_row_cols = st.columns([0.2, 0.6, 0.1, 0.1])
-                    with t_row_cols[0]:
-                        st.markdown(f"<div style='padding-top: 4px;'><b>{row['train_day']}</b></div>", unsafe_allow_html=True)
-                    with t_row_cols[1]:
-                        st.markdown(f"<div style='padding-top: 4px; font-size: 0.95rem; white-space: pre-wrap;'>{row['train_content']}</div>", unsafe_allow_html=True)
-                    with t_row_cols[2]:
-                        st.button("✏️", key=f"edit_ftrain_{row['id']}", on_click=trigger_train_edit, args=(row.to_dict(),))
-                    with t_row_cols[3]:
-                        if st.button("🗑️", key=f"del_ftrain_{row['id']}"):
-                            if delete_dad_training_detail(row['id']):
-                                trigger_realtime_backup()
-                                st.rerun()
-
-            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<div id='anchor-project-record' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
-            st.subheader('✅ 项目完成记录')
-            
-            record_date = st.date_input("选择记录日期", value=get_now_sgt().date(), key="fitness_record_date")
-            date_str = record_date.strftime("%Y-%m-%d")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Header row
-            col1, col2, col3, col4, col5, col6, col7 = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12])
-            col1.markdown("**类别**")
-            col2.markdown("**项目**")
-            col3.markdown("**重量(kg)**")
-            col4.markdown("**次数**")
-            col5.markdown("**组数**")
-            col6.markdown("**保存**")
-            col7.markdown("**清除**")
-            
-            st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
-            
-            fitness_msg_ph = st.empty()
-            
-            if "fitness_record_toast" in st.session_state:
-                st.toast(st.session_state.pop("fitness_record_toast"))
-                
-            latest_fitness = get_latest_fitness_records()
-            
-            def clear_fitness_row(k_w, k_r, k_s):
-                st.session_state[k_w] = 0.0
-                st.session_state[k_r] = 0
-                st.session_state[k_s] = 0
-
-            @st.dialog("⚠️ 确认覆盖记录")
-            def confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val):
-                st.warning(f"在 {date_str} 这一天，【{exercise}】已经有保存记录了。是否要用当前的数据覆盖它？")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✔️ 确认覆盖", use_container_width=True):
-                        if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
-                            st.session_state["fitness_record_toast"] = f"✅ 【{exercise}】已被成功覆盖！"
-                            trigger_realtime_backup()
-                            st.rerun()
-                with col2:
-                    if st.button("❌ 取消", use_container_width=True):
-                        st.rerun()
-
-            def render_fitness_row(category, exercise, idx):
-                col_c, col_e, col_w, col_r, col_s, col_save, col_clear = st.columns([0.15, 0.25, 0.12, 0.12, 0.12, 0.12, 0.12], vertical_alignment="center")
-                
-                k_w = f"f_w_{idx}"
-                k_r = f"f_r_{idx}"
-                k_s = f"f_s_{idx}"
-                
-                # Retrieve default values from latest records if available
-                default_w = latest_fitness.get(exercise, {}).get('weight', 0.0)
-                default_r = latest_fitness.get(exercise, {}).get('reps', 0)
-                default_s = latest_fitness.get(exercise, {}).get('sets', 0)
-                
-                # 显式初始化 Session State，确保刷新后缺省值必定生效
-                if k_w not in st.session_state:
-                    st.session_state[k_w] = float(default_w)
-                if k_r not in st.session_state:
-                    st.session_state[k_r] = int(default_r)
-                if k_s not in st.session_state:
-                    st.session_state[k_s] = int(default_s)
-                
-                with col_c:
-                    st.markdown(f"<span style='font-size: 0.9em; color: #555;'>{category}</span>", unsafe_allow_html=True)
-                with col_e:
-                    st.markdown(f"<span style='font-weight: bold; font-size: 0.9em;'>{exercise}</span>", unsafe_allow_html=True)
-                with col_w:
-                    w_val = st.number_input("w", min_value=0.0, value=float(default_w), step=0.5, key=k_w, label_visibility="collapsed")
-                with col_r:
-                    r_val = st.number_input("r", min_value=0, value=int(default_r), step=1, key=k_r, label_visibility="collapsed")
-                with col_s:
-                    s_val = st.number_input("s", min_value=0, value=int(default_s), step=1, key=k_s, label_visibility="collapsed")
-                with col_save:
-                    if st.button("保存", key=f"f_save_{idx}", use_container_width=True):
-                        if w_val <= 0 or r_val <= 0 or s_val <= 0:
-                            fitness_msg_ph.error(f"⚠️ 【{exercise}】保存失败：重量(kg)、次数、组数均必须大于0！")
-                        else:
-                            if has_fitness_record(date_str, exercise):
-                                confirm_overwrite_dialog(date_str, category, exercise, w_val, r_val, s_val)
-                            else:
-                                if add_dad_fitness_record(date_str, category, exercise, w_val, r_val, s_val):
-                                    st.toast(f"✅ 【{exercise}】已保存！")
-                                    trigger_realtime_backup()
-                with col_clear:
-                    st.button("清除", key=f"f_clear_{idx}", use_container_width=True, on_click=clear_fitness_row, args=(k_w, k_r, k_s))
-            
-            upper_exercises = [
-                "哑铃侧平举",
-                "高位下拉",
-                "哑铃卧推",
-                "窄握坐姿划船(宽/窄交替)",
-                "面拉（改善驼背）",
-                "肱三曲杆下压（没劲可不做）"
-            ]
-            
-            lower_exercises = [
-                "腿推机（必做，脚位偏高）",
-                "坐姿腿弯举（必做）",
-                "侧平举（必做）",
-                "臀推（没劲可少做几组）",
-                "坐姿腿伸（没劲可不做）"
-            ]
-            
-            idx = 0
-            for ex in upper_exercises:
-                render_fitness_row("上肢重训日", ex, idx)
-                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-                idx += 1
-                
-            st.markdown("<div style='text-align: right; margin-bottom: 10px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-            st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
-            
-            for ex in lower_exercises:
-                render_fitness_row("下肢重训日", ex, idx)
-                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-                idx += 1
-                
-            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<div id='anchor-history-performance' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
-            st.subheader('📈 重训项目历史表现')
-            
-            all_exercises_formatted = [f"上肢日-{ex}" for ex in upper_exercises] + [f"下肢日-{ex}" for ex in lower_exercises]
-            selected_ex_formatted = st.selectbox("选择重训项目查看历史趋势", options=all_exercises_formatted, key="history_ex_select")
-            
-            if selected_ex_formatted:
-                selected_ex = selected_ex_formatted.split("-", 1)[1]
-                all_fr_df = get_all_fitness_records()
-                if not all_fr_df.empty:
-                    ex_df = all_fr_df[all_fr_df['exercise'] == selected_ex].copy()
-                    if not ex_df.empty:
-                        ex_df['record_date'] = pd.to_datetime(ex_df['record_date'])
-                        ex_df = ex_df.sort_values(by='record_date')
-                        
-                        min_date = (ex_df['record_date'].min() - pd.Timedelta(days=5)).isoformat()
-                        max_date = (ex_df['record_date'].max() + pd.Timedelta(days=5)).isoformat()
-                        
-                        min_w = max(0, float(ex_df['weight'].min()) * 0.8)
-                        max_w = float(ex_df['weight'].max()) * 1.2
-                        
-                        min_r = max(0, float(ex_df['reps'].min()) * 0.8)
-                        max_r = float(ex_df['reps'].max()) * 1.2
-                        
-                        top_base = alt.Chart(ex_df).encode(
-                            x=alt.X('record_date:T', title=None, axis=alt.Axis(labels=False, ticks=False, domain=False), 
-                                    scale=alt.Scale(domain=[min_date, max_date]))
-                        )
-                        
-                        bottom_base = alt.Chart(ex_df).encode(
-                            x=alt.X('record_date:T', title='日期', axis=alt.Axis(format='%Y-%m-%d', labelAngle=-45), 
-                                    scale=alt.Scale(domain=[min_date, max_date]))
-                        )
-                        
-                        base_weight = top_base.encode(
-                            y=alt.Y('weight:Q', title='重量 (KG)', scale=alt.Scale(domain=[min_w, max_w])),
-                            tooltip=['record_date', 'weight', 'reps', 'sets']
-                        )
-                        line_weight = base_weight.mark_line(point=True, color='#3b82f6')
-                        
-                        base_reps = top_base.encode(
-                            y=alt.Y('reps:Q', title='次数', scale=alt.Scale(domain=[min_r, max_r])),
-                            tooltip=['record_date', 'weight', 'reps', 'sets']
-                        )
-                        line_reps = base_reps.mark_line(point=True, color='#ef4444')
-                        
-                        top_chart = alt.layer(line_weight, line_reps).resolve_scale(
-                            y='independent'
-                        ).properties(
-                            height=250,
-                            width="container"
-                        )
-                        
-                        bar_sets = bottom_base.encode(
-                            y=alt.Y('sets:Q', title='组数', axis=alt.Axis(tickMinStep=1)),
-                            tooltip=['record_date', 'weight', 'reps', 'sets']
-                        ).mark_bar(size=15, color='#10b981', opacity=0.8).properties(
-                            height=100,
-                            width="container"
-                        )
-                        
-                        chart = alt.vconcat(top_chart, bar_sets, spacing=0).resolve_scale(
-                            x='shared'
-                        ).interactive()
-                        
-                        col_chart, _ = st.columns([4, 1])
-                        with col_chart:
-                            st.altair_chart(chart, use_container_width=True)
-                            st.markdown("<div style='text-align: center; font-size: 0.9em; margin-top: -15px;'><span style='color: #3b82f6; font-weight: bold;'>━━ 重量(KG)</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #ef4444; font-weight: bold;'>━━ 次数</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style='color: #10b981; font-weight: bold;'>▇ 组数</span></div>", unsafe_allow_html=True)
-                            
-                        st.markdown("<div style='text-align: right; margin-top: 10px; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-                        st.markdown("<br><br>", unsafe_allow_html=True)
-                        st.subheader(f'📝 【{selected_ex}】历史数据明细与修改')
-                        
-                        col_d, col_w, col_r, col_s, col_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
-                        col_d.markdown("**日期**")
-                        col_w.markdown("**重量(kg)**")
-                        col_r.markdown("**次数**")
-                        col_s.markdown("**组数**")
-                        col_u.markdown("**操作**")
-                        
-                        st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
-                        
-                        cat_str = "上肢重训日" if selected_ex in upper_exercises else "下肢重训日"
-                        hist_msg_ph = st.empty()
-                        
-                        for _, row in ex_df.sort_values(by='record_date', ascending=False).iterrows():
-                            r_date = row['record_date'].strftime('%Y-%m-%d') if isinstance(row['record_date'], pd.Timestamp) else row['record_date']
-                            
-                            k_w_hist = f"h_w_{r_date}_{selected_ex}"
-                            k_r_hist = f"h_r_{r_date}_{selected_ex}"
-                            k_s_hist = f"h_s_{r_date}_{selected_ex}"
-                            
-                            hc_d, hc_w, hc_r, hc_s, hc_u = st.columns([0.22, 0.18, 0.15, 0.15, 0.3], vertical_alignment="center")
-                            
-                            with hc_d:
-                                st.markdown(f"<div style='padding-top: 5px;'><b>{r_date}</b></div>", unsafe_allow_html=True)
-                            with hc_w:
-                                hw_val = st.number_input("w", min_value=0.0, value=float(row['weight']), step=0.5, key=k_w_hist, label_visibility="collapsed")
-                            with hc_r:
-                                hr_val = st.number_input("r", min_value=0, value=int(row['reps']), step=1, key=k_r_hist, label_visibility="collapsed")
-                            with hc_s:
-                                hs_val = st.number_input("s", min_value=0, value=int(row['sets']), step=1, key=k_s_hist, label_visibility="collapsed")
-                            with hc_u:
-                                bcol1, bcol2 = st.columns(2)
-                                with bcol1:
-                                    if st.button("更新", key=f"h_upd_{r_date}_{selected_ex}", use_container_width=True):
-                                        if hw_val <= 0 or hr_val <= 0 or hs_val <= 0:
-                                            hist_msg_ph.error(f"⚠️ 【{selected_ex}】({r_date}) 更新失败：重量、次数、组数均必须大于0！")
-                                        else:
-                                            if add_dad_fitness_record(r_date, cat_str, selected_ex, hw_val, hr_val, hs_val):
-                                                st.session_state["fitness_record_toast"] = f"✅ 【{selected_ex}】({r_date}) 已更新！"
-                                                trigger_realtime_backup()
-                                                st.rerun()
-                                with bcol2:
-                                    if st.button("删除", key=f"h_del_{r_date}_{selected_ex}", use_container_width=True):
-                                        if delete_dad_fitness_record(r_date, selected_ex):
-                                            st.session_state["fitness_record_toast"] = f"🗑️ 【{selected_ex}】({r_date}) 已彻底删除！"
-                                            trigger_realtime_backup()
-                                            st.rerun()
-                    else:
-                        st.info(f"尚无【{selected_ex}】的历史记录。")
-                else:
-                    st.info("尚无任何重训历史记录。")
-
-            st.markdown("<div style='text-align: right; margin-bottom: 20px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
-
         elif selected_tab == '🌸 恩雅的健康':
             st.markdown("<h2 style='color: #db2777;'>🌸 恩雅的健康中心</h2>", unsafe_allow_html=True)
             
