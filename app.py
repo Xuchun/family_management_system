@@ -2371,6 +2371,7 @@ try:
             <ul style="margin-top: 10px; margin-bottom: 0;">
                 <li><a href="#anchor-weight-record" target="_self" style="text-decoration: none; color: #0366d6;">⚖️ 体重记录</a></li>
                 <li><a href="#anchor-project-record" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录-上肢</a></li>
+                <li><a href="#anchor-project-record-lower" target="_self" style="text-decoration: none; color: #0366d6;">✅ 项目完成记录-下肢</a></li>
                 <li><a href="#anchor-weekly-plan" target="_self" style="text-decoration: none; color: #0366d6;">🏋️ 每周运动计划</a></li>
                 <li><a href="#anchor-history-performance" target="_self" style="text-decoration: none; color: #0366d6;">📈 重训项目历史表现</a></li>
                 <li><a href="#anchor-fitness-goals" target="_self" style="text-decoration: none; color: #0366d6;">🎯 健身目标（同龄人5-10%）</a></li>
@@ -2601,6 +2602,9 @@ try:
                 
             st.markdown("<div style='text-align: right; margin-bottom: 10px;'><a href='#anchor-toc' target='_self' style='text-decoration: none; color: #0366d6; font-weight: bold;'>⬆️ 返回目录</a></div>", unsafe_allow_html=True)
             st.markdown("<hr style='margin-top: 10px; margin-bottom: 10px;'/>", unsafe_allow_html=True)
+            
+            st.markdown("<div id='anchor-project-record-lower' style='position: relative; top: -80px;'></div>", unsafe_allow_html=True)
+            st.subheader('✅ 项目完成记录-下肢')
             
             for ex in lower_exercises:
                 render_fitness_row("下肢重训日", ex, idx)
