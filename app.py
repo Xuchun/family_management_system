@@ -47,12 +47,20 @@ import streamlit.components.v1 as components
 # 强力注入 localStorage 恢复机制，对抗 iOS Safari 重启掉线
 components.html("""
 <script>
-try {
-    var token = window.parent.localStorage.getItem('family_auth_token') || window.localStorage.getItem('family_auth_token');
-    if (token && window.parent.location.href.indexOf('auth_key') === -1) {
-        window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + '?auth_key=' + token;
+    var token = null;
+    try { token = window.localStorage.getItem('family_auth_token'); } catch(e) {}
+    try { if(!token && window.parent) token = window.parent.localStorage.getItem('family_auth_token'); } catch(e) {}
+    
+    if (token) {
+        var hasAuth = false;
+        try { hasAuth = (window.parent.location.href.indexOf('auth_key') !== -1); } 
+        catch(e) { hasAuth = (window.location.href.indexOf('auth_key') !== -1); }
+        
+        if (!hasAuth) {
+            try { window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + '?auth_key=' + token; }
+            catch(e) { window.location.href = window.location.origin + window.location.pathname + '?auth_key=' + token; }
+        }
     }
-} catch(e) {}
 </script>
 """, height=0)
 
@@ -1692,10 +1700,8 @@ try:
                 document.cookie = c_str;
                 if(window.parent) window.parent.document.cookie = c_str;
                 
-                try {{
-                    window.parent.localStorage.removeItem('family_auth_token');
-                    window.localStorage.removeItem('family_auth_token');
-                }} catch(e) {{}}
+                try {{ window.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
+                try {{ window.parent.localStorage.removeItem('family_auth_token'); }} catch(e) {{}}
                 
                 // 强制父级窗口也刷新到不带任何参数的 URL
                 var home = window.location.origin + window.location.pathname;
@@ -1736,10 +1742,8 @@ try:
                             document.cookie = c_str;
                             if(window.parent) window.parent.document.cookie = c_str;
                             
-                            try {{
-                                window.parent.localStorage.setItem('family_auth_token', 'authenticated');
-                                window.localStorage.setItem('family_auth_token', 'authenticated');
-                            }} catch(e) {{}}
+                            try {{ window.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
+                            try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated'); }} catch(e) {{}}
                         </script>
                     """, height=0)
                     st.success("✅ 登录成功！")
@@ -1821,10 +1825,8 @@ try:
                         document.cookie = c_str;
                         if(window.parent) window.parent.document.cookie = c_str;
                         
-                        try {{
-                            window.parent.localStorage.setItem('family_auth_token', 'authenticated_admin');
-                            window.localStorage.setItem('family_auth_token', 'authenticated_admin');
-                        }} catch(e) {{}}
+                        try {{ window.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
+                        try {{ window.parent.localStorage.setItem('family_auth_token', 'authenticated_admin'); }} catch(e) {{}}
                     </script>
                 """, height=0)
                 
